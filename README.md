@@ -2,6 +2,28 @@
 
 **Hosted Application**: https://unbound-hack-ovbx.vercel.app/
 
+
+
+use the api key below 
+
+
+PS C:\Users\rajes\OneDrive\Desktop\unbound>    npx convex run seed:seedAdmin
+[CONVEX ?(seed:seedAdmin)] [LOG] '============================================================'
+[CONVEX ?(seed:seedAdmin)] [LOG] 'Admin User Created'
+[CONVEX ?(seed:seedAdmin)] [LOG] 'Email: admin@example.com'
+[CONVEX ?(seed:seedAdmin)] [LOG] 'API Key: 6bf5c4ce5d08e6a825ed07cb3fa802b79ff56a13d71785c86904055a5287190c'
+[CONVEX ?(seed:seedAdmin)] [LOG] 'Store this key securely. It cannot be retrieved later.'
+[CONVEX ?(seed:seedAdmin)] [LOG] '============================================================'
+PS C:\Users\rajes\OneDrive\Desktop\unbound> 
+
+
+
+
+
+
+
+
+
 ## Table of Contents
 1. [Application Overview](#application-overview)
 2. [Architecture & Tech Stack](#architecture--tech-stack)
