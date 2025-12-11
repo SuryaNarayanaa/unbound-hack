@@ -1,7 +1,6 @@
 # Command Gateway Application Documentation
 
-Hosted app links -->https://unbound-hack-ovbx.vercel.app/
-
+**Hosted Application**: https://unbound-hack-ovbx.vercel.app/
 
 ## Table of Contents
 1. [Application Overview](#application-overview)
@@ -14,20 +13,26 @@ Hosted app links -->https://unbound-hack-ovbx.vercel.app/
 8. [Database Schema](#database-schema)
 9. [Authentication](#authentication)
 10. [Command Processing Flow](#command-processing-flow)
+11. [Advanced Features](#advanced-features)
+12. [Development Setup](#development-setup)
 
 ---
 
 ## Application Overview
 
-**Command Gateway** is a command management and processing system that allows users to submit commands that are automatically evaluated against configurable rules. The system uses a credit-based model where each command execution costs credits, and rules determine whether commands are automatically accepted, rejected, or require manual approval.
+**Command Gateway** is a sophisticated command management and processing system that allows users to submit commands that are automatically evaluated against configurable rules. The system uses a credit-based model where each command execution costs credits, and rules determine whether commands are automatically accepted, rejected, or require manual approval.
 
 ### Key Concepts
 
-- **API Key Authentication**: Users authenticate using API keys (stored as hashed values)
+- **API Key Authentication**: Users authenticate using API keys (stored as hashed values using SHA-256)
 - **Role-Based Access Control**: Two roles - `admin` and `member`
 - **Rule-Based Processing**: Commands are matched against regex patterns with priority-based evaluation
 - **Credit System**: Commands consume credits, which can be managed by admins
 - **Audit Logging**: All significant actions are logged for compliance and debugging
+- **Escalation System**: Commands requiring approval can automatically escalate after a delay
+- **Voting System**: Admins can vote on commands requiring approval, with configurable thresholds
+- **Time-Based Scheduling**: Rules can be scheduled using time windows or cron expressions
+- **User-Tier Restrictions**: Rules can be restricted to specific users or roles
 
 ---
 
@@ -35,18 +40,23 @@ Hosted app links -->https://unbound-hack-ovbx.vercel.app/
 
 ### Frontend
 - **Framework**: Next.js 16 (React 19)
-- **Styling**: Tailwind CSS
+- **Styling**: Tailwind CSS 4.x
 - **UI Components**: Custom components built with Tailwind
 - **State Management**: React Context API (AuthContext, ToastContext)
+- **Data Fetching**: Convex React hooks (`useQuery`, `useMutation`)
+- **Icons**: Lucide React
+- **Date Formatting**: date-fns
 
 ### Backend
 - **Backend Framework**: Convex (serverless backend)
 - **Database**: Convex Database (NoSQL)
 - **Authentication**: Convex Auth (supports Google OAuth and Password auth, but app uses API keys)
-- **API**: RESTful HTTP endpoints via Convex HTTP router
+- **API**: RESTful HTTP endpoints via Convex HTTP router + Convex queries/mutations
+- **Cron Jobs**: Convex cron jobs for escalation processing
 
 ### Key Libraries
 - `@convex-dev/auth`: Authentication library
+- `convex`: Convex backend SDK
 - `date-fns`: Date formatting
 - `lucide-react`: Icons
 - `clsx` & `tailwind-merge`: Utility functions for styling
@@ -64,7 +74,7 @@ Hosted app links -->https://unbound-hack-ovbx.vercel.app/
    - Option to "Remember key" (stores in localStorage)
    - Click "Continue" to authenticate
 4. **Authentication**:
-   - API key is sent to `/api/me` endpoint
+   - API key is sent to Convex query `queries.getMe`
    - Backend validates the key (hashes it and looks up user)
    - User information is returned (id, name, role, credits)
 5. **Dashboard Redirect**: Upon successful authentication, user is redirected to `/dashboard`
@@ -97,7 +107,19 @@ All member features plus:
   - Edit existing rules
   - Enable/disable rules
   - Set rule priority, action type, and cost
+  - Configure escalation settings
+  - Set time-based scheduling (time windows or cron)
+  - Restrict rules to specific users or roles
+  - Set voting thresholds
   - View all rules sorted by priority
+  - Detect rule conflicts
+
+- **Approvals Page** (`/dashboard/approvals`):
+  - View all commands requiring approval
+  - Approve or reject commands
+  - Cast votes on commands (if voting enabled)
+  - View vote counts and thresholds
+  - See command details and matched rules
 
 - **Audit Logs Page** (`/dashboard/audit`):
   - View comprehensive audit trail
@@ -112,23 +134,41 @@ All member features plus:
    - Clicks "Submit Command"
 
 2. **Backend Processing**:
-   - Validates user has sufficient credits
-   - Fetches all enabled rules, sorted by priority (highest first)
+   - Validates user has sufficient credits (early check)
+   - Fetches all enabled rules, filtered by:
+     - Time-based schedules (time windows or cron)
+     - User-tier restrictions (user_id or role)
+   - Sorts rules by priority (highest first), then by creation date
    - Matches command text against rule patterns (regex)
    - First matching rule determines action:
-     - `AUTO_ACCEPT`: Command is immediately executed
+     - `AUTO_ACCEPT`: Command is immediately executed, credits deducted
      - `AUTO_REJECT`: Command is rejected
      - `REQUIRE_APPROVAL`: Command status set to "needs_approval"
-   - If no rule matches, default is `REQUIRE_APPROVAL`
-   - Deducts credits (uses rule cost or default of 1)
-   - Creates command record and audit log
+   - If no rule matches, default is `AUTO_REJECT`
+   - For `REQUIRE_APPROVAL`, sets escalation timestamp if escalation enabled
+   - Creates command record and audit logs
 
 3. **Response**:
    - User receives feedback about command status
    - Command appears in history with appropriate status badge
-   - Credit balance is updated
+   - Credit balance is updated (if executed)
 
-### 4. Logout Flow
+### 4. Approval & Escalation Flow
+
+1. **Commands Requiring Approval**:
+   - Commands with status "needs_approval" appear in Approvals page
+   - Admins can approve or reject commands
+   - If voting is enabled, admins can cast votes
+   - When voting threshold is met, command is auto-approved
+
+2. **Escalation**:
+   - Cron job runs every minute to check for escalated commands
+   - Commands with `escalation_at` timestamp in the past are processed
+   - Escalation action (AUTO_ACCEPT or AUTO_REJECT) is applied
+   - Credits are deducted if escalated to AUTO_ACCEPT
+   - Audit logs are created for escalation events
+
+### 5. Logout Flow
 
 - User clicks logout button in TopBar
 - API key is cleared from localStorage
@@ -156,21 +196,32 @@ Admins have full access to all features and can:
    - Define regex patterns for command matching
    - Set rule actions (AUTO_ACCEPT, AUTO_REJECT, REQUIRE_APPROVAL)
    - Assign custom costs per rule
+   - Configure escalation settings (delay, action)
+   - Set time-based scheduling (time windows or cron expressions)
+   - Restrict rules to specific users or roles
+   - Set voting thresholds for auto-approval
+   - Detect rule conflicts (overlapping patterns, conflicting actions)
 
-3. **Audit & Monitoring**:
+3. **Approval Management**:
+   - View all commands requiring approval
+   - Approve or reject commands with reasons
+   - Cast votes on commands (if voting enabled)
+   - View vote counts and thresholds
+
+4. **Audit & Monitoring**:
    - View complete audit logs
    - Filter logs by user, event type, or date range
    - Monitor all system activities
    - Track credit adjustments, rule changes, and command executions
 
-4. **Command Oversight**:
+5. **Command Oversight**:
    - View all commands from all users (not just their own)
    - See command statuses and matched rules
    - Monitor system usage
 
 ### Admin-Only Routes
 
-The following routes require admin role:
+The following HTTP routes require admin role:
 - `GET /api/users` - List all users
 - `POST /api/users` - Create new user
 - `PATCH /api/users/:userId/credits` - Adjust credits
@@ -180,10 +231,27 @@ The following routes require admin role:
 - `DELETE /api/rules/:ruleId` - Delete rule
 - `GET /api/audit` - View audit logs
 
+The following Convex queries/mutations require admin role:
+- `queries.listUsers` - List all users
+- `queries.createUser` - Create new user
+- `queries.adjustCredits` - Adjust credits
+- `queries.listRules` - List all rules
+- `queries.createRule` - Create rule
+- `queries.updateRule` - Update rule
+- `queries.deleteRule` - Delete rule
+- `queries.getAuditLogs` - View audit logs
+- `queries.getPendingApprovals` - Get pending approvals
+- `queries.approveCommand` - Approve command
+- `queries.rejectCommand` - Reject command
+- `queries.castVote` - Cast vote on command
+- `queries.getVoteCounts` - Get vote counts
+- `queries.detectRuleConflicts` - Detect rule conflicts
+
 ### Admin UI Pages
 
 - `/dashboard/users` - User management interface
 - `/dashboard/rules` - Rule management interface
+- `/dashboard/approvals` - Command approval interface
 - `/dashboard/audit` - Audit log viewer
 
 All admin pages check user role and show "Access Denied" if user is not an admin.
@@ -214,6 +282,7 @@ The application includes a seed function that creates a default admin user. Here
    - **API Key**: Will be displayed in the console output
    - **Role**: `admin`
    - **Name**: "Default Admin"
+   - **Initial Credits**: 100
 
 4. **Important**: The API key is only shown once during creation. Make sure to copy it immediately and store it securely.
 
@@ -222,13 +291,14 @@ The application includes a seed function that creates a default admin user. Here
 If you already have an admin user, you can create additional admins via the API:
 
 ```bash
-curl -X POST http://localhost:8000/api/users \
+curl -X POST https://your-convex-url/api/users \
   -H "Content-Type: application/json" \
   -H "X-API-Key: YOUR_ADMIN_API_KEY" \
   -d '{
     "name": "New Admin",
     "email": "admin2@example.com",
-    "role": "admin"
+    "role": "admin",
+    "initialCredits": 100
   }'
 ```
 
@@ -240,26 +310,6 @@ The response will include the new user's API key:
   "apiKey": "generated_api_key_here"
 }
 ```
-
-### Method 3: Direct Database Insertion (Advanced)
-
-For development/testing, you can manually create a user in the Convex dashboard:
-
-1. Open Convex Dashboard
-2. Navigate to the `users` table
-3. Insert a new document with:
-   ```json
-   {
-     "email": "admin@example.com",
-     "name": "Admin User",
-     "role": "admin",
-     "api_key": "hashed_api_key_here",
-     "created_at": 1234567890
-   }
-   ```
-4. Generate and hash an API key using the utility functions in `convex/lib/api_key.ts`
-
-**Note**: This method requires you to manually generate and hash the API key, which is more complex.
 
 ### Seed Function Details
 
@@ -276,6 +326,7 @@ The seed function (`convex/seed.ts`) performs the following:
      - Name: "Default Admin"
      - Hashed API key
      - Creation timestamp
+   - Initializes user with 100 credits
 4. Outputs the API key to console (only time it's visible)
 
 ### Security Best Practices
@@ -292,7 +343,7 @@ The seed function (`convex/seed.ts`) performs the following:
 
 ### 1. Authentication & Authorization
 
-- **API Key Authentication**: Secure authentication using API keys
+- **API Key Authentication**: Secure authentication using API keys (SHA-256 hashed)
 - **Role-Based Access Control**: Two-tier system (admin/member)
 - **Session Management**: API keys stored in localStorage (optional)
 - **Automatic Redirects**: Unauthenticated users redirected to login
@@ -310,12 +361,15 @@ The seed function (`convex/seed.ts`) performs the following:
 - **Command Submission**: Submit commands via web interface or API
 - **Rule Matching**: Automatic pattern matching using regex
 - **Priority-Based Evaluation**: Rules evaluated by priority (highest first)
+- **Time-Based Rule Activation**: Rules can be scheduled using time windows or cron
+- **User-Tier Restrictions**: Rules can be restricted to specific users or roles
 - **Multiple Actions**:
   - `AUTO_ACCEPT`: Immediate execution
   - `AUTO_REJECT`: Immediate rejection
   - `REQUIRE_APPROVAL`: Manual approval required
-- **Credit Deduction**: Automatic credit deduction on submission
+- **Credit Deduction**: Automatic credit deduction on execution (not on submission for approval)
 - **Insufficient Credits Handling**: Commands rejected if credits insufficient
+- **Mocked Execution**: Commands are mocked (output shows what would be executed)
 
 ### 4. Rule Management (Admin Only)
 
@@ -326,15 +380,20 @@ The seed function (`convex/seed.ts`) performs the following:
 - **Priority Management**: Set rule evaluation order
 - **Cost Assignment**: Set custom credit costs per rule
 - **Regex Validation**: Real-time regex pattern validation
-- **Conflict Detection**: Warns about duplicate patterns
+- **Conflict Detection**: Warns about duplicate patterns and conflicting actions
+- **Escalation Configuration**: Set escalation delay and action
+- **Time-Based Scheduling**: Configure time windows or cron expressions
+- **User-Tier Restrictions**: Restrict rules to specific users or roles
+- **Voting Thresholds**: Set voting thresholds for auto-approval
 
 ### 5. Credit System
 
 - **Credit Balance**: Each user has a credit balance
-- **Automatic Deduction**: Credits deducted on command submission
+- **Automatic Deduction**: Credits deducted on command execution (AUTO_ACCEPT or approved)
 - **Admin Adjustment**: Admins can add/remove credits
 - **Balance Display**: Real-time credit balance in UI
 - **Insufficient Credits**: Commands rejected if balance too low
+- **Credit Tracking**: All credit adjustments are logged in audit logs
 
 ### 6. Command History
 
@@ -345,13 +404,34 @@ The seed function (`convex/seed.ts`) performs the following:
 - **Admin View**: Admins see all commands from all users
 - **Real-Time Updates**: Refresh to see latest commands
 
-### 7. Audit Logging
+### 7. Approval Workflow (Admin Only)
+
+- **Pending Approvals**: View all commands requiring approval
+- **Approve/Reject**: Approve or reject commands with reasons
+- **Voting System**: Cast votes on commands (if voting enabled)
+- **Vote Thresholds**: Auto-approve when threshold is met
+- **Vote Tracking**: View vote counts and individual votes
+- **Credit Validation**: Ensures sufficient credits before approval
+
+### 8. Escalation System
+
+- **Automatic Escalation**: Commands requiring approval can escalate after a delay
+- **Configurable Delay**: Set escalation delay per rule (in milliseconds)
+- **Escalation Actions**: AUTO_ACCEPT or AUTO_REJECT on escalation
+- **Cron Processing**: Escalations processed every minute via cron job
+- **Audit Logging**: All escalations are logged
+
+### 9. Audit Logging
 
 - **Comprehensive Logging**: All significant events logged
 - **Event Types**:
   - `COMMAND_SUBMITTED`: Command submitted for processing
   - `COMMAND_EXECUTED`: Command successfully executed
   - `COMMAND_REJECTED`: Command rejected
+  - `COMMAND_ESCALATED`: Command escalated after delay
+  - `COMMAND_APPROVED`: Command approved by admin
+  - `COMMAND_REJECTED_BY_APPROVER`: Command rejected by admin
+  - `VOTE_CAST`: Vote cast on command
   - `RULE_CREATED`: New rule created
   - `RULE_UPDATED`: Rule modified
   - `RULE_DELETED`: Rule removed
@@ -362,7 +442,7 @@ The seed function (`convex/seed.ts`) performs the following:
 - **Detailed View**: View full log details in modal
 - **Admin Only**: Audit logs only accessible to admins
 
-### 8. Dashboard & Analytics
+### 10. Dashboard & Analytics
 
 - **Overview Dashboard**: Command statistics and recent activity
 - **Statistics Cards**: Total commands, executed, rejected, pending counts
@@ -370,7 +450,7 @@ The seed function (`convex/seed.ts`) performs the following:
 - **Recent Commands**: Last 5 commands displayed
 - **Credit Display**: Current credit balance prominently shown
 
-### 9. UI/UX Features
+### 11. UI/UX Features
 
 - **Responsive Design**: Works on desktop and mobile
 - **Toast Notifications**: Success/error feedback
@@ -380,9 +460,10 @@ The seed function (`convex/seed.ts`) performs the following:
 - **Status Badges**: Color-coded status indicators
 - **Dark Mode Support**: UI adapts to system preferences
 
-### 10. API Features
+### 12. API Features
 
 - **RESTful API**: Standard HTTP methods (GET, POST, PATCH, DELETE)
+- **Convex Queries/Mutations**: Direct Convex function calls from frontend
 - **API Key Header**: Authentication via `X-API-Key` header
 - **Error Handling**: Comprehensive error responses
 - **JSON Responses**: All responses in JSON format
@@ -393,14 +474,16 @@ The seed function (`convex/seed.ts`) performs the following:
 ## API Endpoints
 
 ### Authentication Required
-All endpoints require the `X-API-Key` header (except auth endpoints):
+All endpoints require the `X-API-Key` header:
 ```
 X-API-Key: your_api_key_here
 ```
 
-### User Endpoints
+### HTTP Endpoints (via Convex HTTP Router)
 
-#### GET /api/me
+#### User Endpoints
+
+##### GET /api/me
 Get current user information and credit balance.
 
 **Response**:
@@ -414,7 +497,7 @@ Get current user information and credit balance.
 }
 ```
 
-#### POST /api/users (Admin Only)
+##### POST /api/users (Admin Only)
 Create a new user.
 
 **Request Body**:
@@ -422,7 +505,8 @@ Create a new user.
 {
   "name": "User Name",
   "email": "user@example.com",
-  "role": "admin" | "member"
+  "role": "admin" | "member",
+  "initialCredits": 100
 }
 ```
 
@@ -435,13 +519,13 @@ Create a new user.
 }
 ```
 
-#### PATCH /api/users/:userId/credits (Admin Only)
+##### PATCH /api/users/:userId/credits (Admin Only)
 Adjust user credits.
 
 **Request Body**:
 ```json
 {
-  "amount": 50  // Positive to add, negative to remove
+  "amount": 50
 }
 ```
 
@@ -452,9 +536,9 @@ Adjust user credits.
 }
 ```
 
-### Command Endpoints
+#### Command Endpoints
 
-#### POST /api/commands
+##### POST /api/commands
 Submit a new command.
 
 **Request Body**:
@@ -471,11 +555,12 @@ Submit a new command.
   "status": "executed" | "rejected" | "needs_approval",
   "action": "AUTO_ACCEPT" | "AUTO_REJECT" | "REQUIRE_APPROVAL",
   "cost": 1,
-  "matchedRuleId": "rule_id"
+  "matchedRuleId": "rule_id",
+  "output": "Execution mocked: would run 'list files'"
 }
 ```
 
-#### GET /api/commands
+##### GET /api/commands
 List commands. Members see only their commands; admins see all.
 
 **Query Parameters**:
@@ -492,19 +577,20 @@ List commands. Members see only their commands; admins see all.
     "matched_rule_id": "rule_id",
     "cost": 1,
     "created_at": 1234567890,
-    "executed_at": 1234567890
+    "executed_at": 1234567890,
+    "output": "Execution mocked: would run 'list files'"
   }
 ]
 ```
 
-#### GET /api/commands/:commandId
+##### GET /api/commands/:commandId
 Get a specific command's details.
 
 **Response**: Same as command object in list response.
 
-### Rule Endpoints (Admin Only)
+#### Rule Endpoints (Admin Only)
 
-#### GET /api/rules
+##### GET /api/rules
 List all rules.
 
 **Response**:
@@ -518,12 +604,17 @@ List all rules.
     "enabled": true,
     "cost": 1,
     "created_by": "user_id",
-    "created_at": 1234567890
+    "created_at": 1234567890,
+    "escalation_enabled": false,
+    "schedule_type": "always",
+    "restricted_to_user_id": null,
+    "restricted_to_role": null,
+    "voting_threshold": null
   }
 ]
 ```
 
-#### POST /api/rules
+##### POST /api/rules
 Create a new rule.
 
 **Request Body**:
@@ -533,7 +624,26 @@ Create a new rule.
   "action": "AUTO_ACCEPT" | "AUTO_REJECT" | "REQUIRE_APPROVAL",
   "priority": 10,
   "enabled": true,
-  "cost": 1  // optional
+  "cost": 1,
+  "escalation_enabled": false,
+  "escalation_delay_ms": 3600000,
+  "escalation_action": "AUTO_ACCEPT" | "AUTO_REJECT",
+  "schedule_type": "always" | "time_windows" | "cron",
+  "time_windows": [
+    {
+      "day_of_week": 1,
+      "start_hour": 9,
+      "start_minute": 0,
+      "end_hour": 17,
+      "end_minute": 0,
+      "timezone": "America/New_York"
+    }
+  ],
+  "cron_expression": "0 9 * * 1-5",
+  "cron_timezone": "America/New_York",
+  "restricted_to_user_id": "user_id",
+  "restricted_to_role": "admin" | "member",
+  "voting_threshold": 2
 }
 ```
 
@@ -544,19 +654,10 @@ Create a new rule.
 }
 ```
 
-#### PATCH /api/rules/:ruleId
+##### PATCH /api/rules/:ruleId
 Update an existing rule.
 
-**Request Body** (all fields optional):
-```json
-{
-  "pattern": "^list.*",
-  "action": "AUTO_ACCEPT",
-  "priority": 10,
-  "enabled": true,
-  "cost": 1
-}
-```
+**Request Body** (all fields optional): Same as POST /api/rules
 
 **Response**:
 ```json
@@ -565,7 +666,7 @@ Update an existing rule.
 }
 ```
 
-#### DELETE /api/rules/:ruleId
+##### DELETE /api/rules/:ruleId
 Delete a rule.
 
 **Response**:
@@ -575,9 +676,9 @@ Delete a rule.
 }
 ```
 
-### Audit Endpoints (Admin Only)
+#### Audit Endpoints (Admin Only)
 
-#### GET /api/audit
+##### GET /api/audit
 Get audit logs.
 
 **Query Parameters**:
@@ -601,6 +702,28 @@ Get audit logs.
 ]
 ```
 
+### Convex Queries/Mutations
+
+The application also exposes Convex queries and mutations that can be called directly from the frontend:
+
+- `queries.getMe` - Get current user info
+- `queries.listUsers` - List all users (admin)
+- `queries.createUser` - Create user (admin)
+- `queries.adjustCredits` - Adjust credits (admin)
+- `queries.listRules` - List all rules (admin)
+- `queries.createRule` - Create rule (admin)
+- `queries.updateRule` - Update rule (admin)
+- `queries.deleteRule` - Delete rule (admin)
+- `queries.detectRuleConflicts` - Detect rule conflicts (admin)
+- `queries.submitCommand` - Submit command
+- `queries.listCommands` - List commands
+- `queries.getAuditLogs` - Get audit logs (admin)
+- `queries.getPendingApprovals` - Get pending approvals (admin)
+- `queries.approveCommand` - Approve command (admin)
+- `queries.rejectCommand` - Reject command (admin)
+- `queries.castVote` - Cast vote (admin)
+- `queries.getVoteCounts` - Get vote counts (admin)
+
 ---
 
 ## Database Schema
@@ -616,7 +739,7 @@ Get audit logs.
   isAnonymous?: boolean,
   name?: string,
   image?: string,
-  api_key?: string,  // Hashed API key
+  api_key?: string,  // Hashed API key (SHA-256)
   role?: "admin" | "member",
   created_at?: number,
   updated_at?: number
@@ -650,13 +773,38 @@ Get audit logs.
   cost?: number,  // Credit cost
   created_by: Id<"users">,
   created_at: number,
-  enabled: boolean
+  enabled: boolean,
+  
+  // Escalation fields
+  escalation_enabled?: boolean,
+  escalation_delay_ms?: number,  // Delay in milliseconds
+  escalation_action?: "AUTO_ACCEPT" | "AUTO_REJECT",
+  
+  // Time-based scheduling fields
+  schedule_type?: "always" | "time_windows" | "cron",
+  time_windows?: Array<{
+    day_of_week: number,  // 0-6 (Sunday-Saturday)
+    start_hour: number,   // 0-23
+    start_minute: number, // 0-59
+    end_hour: number,     // 0-23
+    end_minute: number,   // 0-59
+    timezone?: string,    // e.g., "America/New_York"
+  }>,
+  cron_expression?: string,  // Cron expression (5 parts)
+  cron_timezone?: string,    // Timezone for cron
+  
+  // User-tier restriction fields
+  restricted_to_user_id?: Id<"users">,
+  restricted_to_role?: "admin" | "member",
+  voting_threshold?: number,  // Required votes for auto-approval
 }
 ```
 
 **Indexes**:
 - `by_enabled_and_priority`: For rule matching queries
 - `by_created_by`: For finding rules by creator
+- `by_restricted_user`: For user-specific rules
+- `by_restricted_role`: For role-specific rules
 
 ### Commands Table
 ```typescript
@@ -669,7 +817,19 @@ Get audit logs.
   cost: number,
   created_at: number,
   executed_at?: number,
-  rejection_reason?: string
+  rejection_reason?: string,
+  output?: string,  // Mocked execution output
+  
+  // Escalation tracking fields
+  escalation_at?: number,  // Timestamp when escalation should trigger
+  escalated?: boolean,     // Whether escalation has been processed
+  escalation_action?: "AUTO_ACCEPT" | "AUTO_REJECT",
+  
+  // Approval tracking fields
+  approver_id?: Id<"users">,
+  approved_at?: number,
+  approval_reason?: string,
+  voting_threshold?: number,  // Required votes for auto-approval
 }
 ```
 
@@ -678,6 +838,7 @@ Get audit logs.
 - `by_status`: For status-based queries
 - `by_user_id_and_status`: For combined queries
 - `by_matched_rule_id`: For rule-related queries
+- `by_status_and_escalation_at`: For escalation queries
 
 ### Audit Logs Table
 ```typescript
@@ -686,8 +847,9 @@ Get audit logs.
   user_id: Id<"users">,
   command_id?: Id<"commands">,
   event_type: "COMMAND_SUBMITTED" | "COMMAND_EXECUTED" | "COMMAND_REJECTED" | 
-              "RULE_CREATED" | "USER_CREATED" | "USER_UPDATED" | 
-              "CREDITS_UPDATED" | "RULE_UPDATED" | "RULE_DELETED",
+              "COMMAND_ESCALATED" | "COMMAND_APPROVED" | "COMMAND_REJECTED_BY_APPROVER" |
+              "VOTE_CAST" | "RULE_CREATED" | "RULE_UPDATED" | "RULE_DELETED" |
+              "USER_CREATED" | "USER_UPDATED" | "CREDITS_UPDATED",
   details: any,  // Flexible JSON object
   created_at: number
 }
@@ -698,6 +860,23 @@ Get audit logs.
 - `by_event_type`: For event type queries
 - `by_user_id_and_event_type`: For combined queries
 - `by_command_id`: For command-related audit logs
+- `by_created_at`: For time-based queries
+
+### Votes Table
+```typescript
+{
+  _id: Id<"votes">,
+  command_id: Id<"commands">,
+  user_id: Id<"users">,
+  vote_type: "approve" | "reject",
+  created_at: number
+}
+```
+
+**Indexes**:
+- `by_command_id`: For command vote queries
+- `by_user_id`: For user vote queries
+- `by_command_and_user`: For unique vote per user per command
 
 ---
 
@@ -707,9 +886,9 @@ Get audit logs.
 
 The application uses API key-based authentication:
 
-1. **Key Generation**: API keys are 64-character hexadecimal strings generated using cryptographically secure random values
+1. **Key Generation**: API keys are 64-character hexadecimal strings generated using cryptographically secure random values (`crypto.getRandomValues`)
 2. **Key Storage**: Keys are hashed using SHA-256 before storage in the database
-3. **Key Transmission**: Keys are sent via `X-API-Key` HTTP header
+3. **Key Transmission**: Keys are sent via `X-API-Key` HTTP header or passed to Convex queries/mutations
 4. **Key Validation**: On each request, the key is hashed and compared against stored hashes
 5. **Key Display**: New keys are only shown once during user creation
 
@@ -717,7 +896,7 @@ The application uses API key-based authentication:
 
 1. User enters API key in login form
 2. Key is stored in localStorage (if "Remember key" is checked)
-3. Key is sent with every API request via `X-API-Key` header
+3. Key is sent with every API request via `X-API-Key` header or passed to Convex functions
 4. Backend hashes the key and looks up user
 5. User information is returned if key is valid
 6. Invalid keys return 401 Unauthorized
@@ -725,7 +904,12 @@ The application uses API key-based authentication:
 ### Role-Based Access Control
 
 - **Member Role**: Can submit commands, view own commands, view dashboard
-- **Admin Role**: All member permissions plus user management, rule management, audit logs
+- **Admin Role**: All member permissions plus:
+  - User management
+  - Rule management
+  - Audit logs
+  - Command approvals
+  - Voting on commands
 
 ---
 
@@ -736,41 +920,56 @@ The application uses API key-based authentication:
 ```
 1. User Submits Command
    ↓
-2. Validate User Credits
-   ├─ Insufficient → Reject Command, Log Event
+2. Early Credit Check
+   ├─ Balance <= 0 → Reject Command, Log Event
    └─ Sufficient → Continue
    ↓
-3. Fetch Enabled Rules (Sorted by Priority Descending)
+3. Fetch Enabled Rules
+   ├─ Filter by time-based schedules (time windows/cron)
+   ├─ Filter by user-tier restrictions (user_id/role)
+   └─ Sort by priority (highest first), then creation date
    ↓
 4. Match Command Text Against Rules (Regex)
    ├─ Match Found → Use Rule Action & Cost
-   └─ No Match → Default to REQUIRE_APPROVAL, Cost = 1
+   └─ No Match → Default to AUTO_REJECT, Cost = 1
    ↓
-5. Determine Status Based on Action
-   ├─ AUTO_ACCEPT → status = "executed"
+5. Final Credit Check (with actual cost)
+   ├─ Insufficient → Reject Command, Log Event
+   └─ Sufficient → Continue
+   ↓
+6. Determine Status Based on Action
+   ├─ AUTO_ACCEPT → status = "executed", deduct credits
    ├─ AUTO_REJECT → status = "rejected"
    └─ REQUIRE_APPROVAL → status = "needs_approval"
    ↓
-6. Deduct Credits
+7. Set Escalation (if REQUIRE_APPROVAL and escalation enabled)
+   └─ escalation_at = now + escalation_delay_ms
    ↓
-7. Create Command Record
+8. Create Command Record
    ↓
-8. Create Audit Log Entry
+9. Create Audit Log Entries
    ↓
-9. Return Response to User
+10. Return Response to User
 ```
 
 ### Rule Matching Algorithm
 
-1. Rules are fetched and sorted by priority (highest first)
-2. Command text is tested against each rule's regex pattern
-3. First matching rule wins (priority determines order)
-4. If no rule matches, default action is `REQUIRE_APPROVAL`
-5. Rule's cost is used if specified, otherwise default cost is 1
+1. Rules are fetched and filtered by:
+   - Enabled status
+   - Time-based schedules (time windows or cron)
+   - User-tier restrictions (user_id or role)
+2. Rules are sorted by priority (highest first), then by creation date (earlier first)
+3. Command text is tested against each rule's regex pattern
+4. First matching rule wins (priority determines order)
+5. If no rule matches, default action is `AUTO_REJECT`
+6. Rule's cost is used if specified, otherwise default cost is 1
 
 ### Credit Deduction
 
-- Credits are deducted **before** command execution
+- Credits are deducted **only on execution**:
+  - For `AUTO_ACCEPT`: Credits deducted immediately
+  - For `REQUIRE_APPROVAL`: Credits deducted when approved
+  - For `AUTO_REJECT`: No credits deducted
 - If credits are insufficient, command is rejected immediately
 - Credit balance can go negative (though commands will be rejected)
 - Admins can adjust credits at any time
@@ -778,173 +977,36 @@ The application uses API key-based authentication:
 ### Status Transitions
 
 - **pending**: Initial state (rare, used for edge cases)
-- **executed**: Command matched AUTO_ACCEPT rule
-- **rejected**: Command matched AUTO_REJECT rule OR insufficient credits
-- **needs_approval**: Command matched REQUIRE_APPROVAL rule OR no rule matched
+- **executed**: Command matched AUTO_ACCEPT rule OR was approved OR escalated to AUTO_ACCEPT
+- **rejected**: Command matched AUTO_REJECT rule OR insufficient credits OR was rejected OR escalated to AUTO_REJECT
+- **needs_approval**: Command matched REQUIRE_APPROVAL rule
+
+### Escalation Processing
+
+1. Cron job runs every minute
+2. Finds commands with:
+   - Status = "needs_approval"
+   - `escalation_at` is set and in the past
+   - `escalated` = false
+3. Applies escalation action (AUTO_ACCEPT or AUTO_REJECT)
+4. Deducts credits if escalated to AUTO_ACCEPT
+5. Updates command status and creates audit logs
 
 ---
 
-## Development Setup
+## Advanced Features
 
-### Prerequisites
-- Node.js 18+ 
-- npm or yarn
-- Convex account (free tier available)
+### 1. Escalation System
 
-### Installation
+Commands requiring approval can automatically escalate after a configurable delay:
 
-1. **Clone the repository**
-   ```bash
-   git clone <repository-url>
-   cd unbound
-   ```
+- **Configuration**: Set `escalation_enabled`, `escalation_delay_ms`, and `escalation_action` on rules
+- **Processing**: Cron job processes escalations every minute
+- **Actions**: Commands can escalate to AUTO_ACCEPT or AUTO_REJECT
+- **Audit**: All escalations are logged
 
-2. **Install dependencies**
-   ```bash
-   npm install
-   ```
+### 2. Voting System
 
-3. **Set up Convex**
-   ```bash
-   npx convex dev
-   ```
-   This will:
-   - Create a new Convex project (if needed)
-   - Set up environment variables
-   - Deploy the backend schema and functions
+Admins can vote on commands requiring approval:
 
-4. **Configure environment variables**
-   Create `.env.local` with:
-   ```
-   NEXT_PUBLIC_API_URL=http://localhost:8000
-   CONVEX_DEPLOYMENT=<your-convex-deployment-url>
-   GOOGLE_CLIENT_ID=<if-using-google-auth>
-   GOOGLE_CLIENT_SECRET=<if-using-google-auth>
-   ```
-
-5. **Run the seed script** (to create admin user)
-   ```bash
-   npx convex run seed:seedAdmin
-   ```
-   Copy the API key from the console output.
-
-6. **Start the development server**
-   ```bash
-   npm run dev
-   ```
-   This starts both Next.js frontend and Convex backend.
-
-7. **Access the application**
-   - Frontend: http://localhost:3000
-   - Convex Dashboard: https://dashboard.convex.dev
-
-### Running in Production
-
-1. **Build the application**
-   ```bash
-   npm run build
-   ```
-
-2. **Deploy Convex backend**
-   ```bash
-   npx convex deploy --prod
-   ```
-
-3. **Start the production server**
-   ```bash
-   npm start
-   ```
-
----
-
-## Security Considerations
-
-1. **API Key Security**:
-   - Keys are hashed before storage (SHA-256)
-   - Keys are only displayed once during creation
-   - Keys should be transmitted over HTTPS in production
-
-2. **Input Validation**:
-   - Regex patterns are validated before rule creation
-   - Command text is validated before submission
-   - All inputs are sanitized
-
-3. **Access Control**:
-   - Role-based access control enforced at API level
-   - Admin-only routes check user role
-   - Members cannot access admin endpoints
-
-4. **Audit Trail**:
-   - All significant actions are logged
-   - Audit logs are immutable
-   - Admin-only access to audit logs
-
-5. **Credit System**:
-   - Credits are deducted atomically
-   - Insufficient credits prevent command execution
-   - Credit adjustments are logged
-
----
-
-## Troubleshooting
-
-### Common Issues
-
-1. **"Invalid API Key" Error**:
-   - Verify the API key is correct
-   - Check that the key hasn't been modified
-   - Ensure the key is being sent in the `X-API-Key` header
-
-2. **"Access Denied" Error**:
-   - Verify user has the correct role (admin vs member)
-   - Check that the endpoint requires admin access
-   - Ensure user role is set correctly in database
-
-3. **Commands Not Matching Rules**:
-   - Verify rule pattern is correct regex
-   - Check rule is enabled
-   - Verify rule priority (higher priority rules evaluated first)
-   - Test regex pattern independently
-
-4. **Credits Not Deducting**:
-   - Check user has sufficient credits
-   - Verify command was successfully created
-   - Check audit logs for credit update events
-
-5. **Seed Admin Not Working**:
-   - Ensure Convex backend is running
-   - Check that email doesn't already exist
-   - Verify seed function is being called correctly
-   - Check console for error messages
-
----
-
-## Future Enhancements
-
-Potential features for future development:
-
-1. **Command Approval Workflow**: UI for admins to approve/reject pending commands
-2. **Webhook Support**: Send webhooks on command execution
-3. **Rate Limiting**: Prevent command spam
-4. **Command Templates**: Pre-defined command templates
-5. **Bulk Operations**: Bulk credit adjustments, bulk rule updates
-6. **Export Functionality**: Export commands, logs, users to CSV/JSON
-7. **Advanced Analytics**: Charts and graphs for usage statistics
-8. **Email Notifications**: Notify users of command status changes
-9. **API Key Rotation**: Allow users to rotate their API keys
-10. **Multi-Tenancy**: Support for multiple organizations/workspaces
-
----
-
-## Support & Contributing
-
-For issues, questions, or contributions:
-- Check the Convex documentation: https://docs.convex.dev
-- Review the codebase structure
-- Test changes thoroughly before submitting
-
----
-
-**Last Updated**: 2024
-**Version**: 0.1.0
-
+- **Voting**: Adm

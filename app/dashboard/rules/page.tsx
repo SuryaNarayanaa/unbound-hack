@@ -46,7 +46,7 @@ export default function RulesPage() {
 
   const detectConflicts = useQuery(
     api.queries.detectRuleConflicts,
-    pattern && apiKey ? { apiKey, pattern, action, excludeRuleId: editingId as Id<"rules"> | undefined } : "skip"
+    pattern && apiKey ? { apiKey, pattern, action, excludeRuleId: editingId ? (editingId as Id<"rules">) : undefined } : "skip"
   );
 
   const conflictWarning = detectConflicts && detectConflicts.length > 0;
