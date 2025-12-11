@@ -127,7 +127,7 @@ export default function UsersPage() {
                     <TableCell className="font-medium">{u.name}</TableCell>
                     <TableCell>
                       <Badge variant={u.role === "admin" ? "destructive" : "secondary"}>
-                        {u.role.toUpperCase()}
+                        {u.role?.toUpperCase() ?? "MEMBER"}
                       </Badge>
                     </TableCell>
                     <TableCell>{u.credits}</TableCell>
