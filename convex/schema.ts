@@ -32,9 +32,5 @@ export default defineSchema({
     updated_at: v.optional(v.number()),            // Last profile update
   })
     .index("email", ["email"])           // Required by Convex Auth
-    .index("by_api_key", ["api_key"]),
-    // For API key lookups (should be unique)
-  numbers: defineTable({
-    value: v.number(),
-  }),
+    .index("by_api_key", ["api_key"]),   // For API key lookups (should be unique)
 });
