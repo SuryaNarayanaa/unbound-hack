@@ -1,0 +1,41 @@
+import { internalMutation, internalQuery } from "./_generated/server";
+import { v } from "convex/values";
+
+export const getUserByApiKey = internalQuery({
+  args: { apiKeyHash: v.string() },
+  handler: async (ctx, args) => {
+    return await ctx.db
+      .query("users")
+      .withIndex("by_api_key", (q) => q.eq("api_key", args.apiKeyHash))
+      .unique();
+  },
+});
+
+export const getUserByEmail = internalQuery({
+  args: { email: v.string() },
+  handler: async (ctx, args) => {
+    return await ctx.db
+      .query("users")
+      .withIndex("email", (q) => q.eq("email", args.email))
+      .unique();
+  },
+});
+
+export const createUser = internalMutation({
+  args: {
+    email: v.optional(v.string()),
+    role: v.union(v.literal("admin"), v.literal("member")),
+    apiKeyHash: v.string(),
+    name: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    return await ctx.db.insert("users", {
+      email: args.email,
+      role: args.role,
+      api_key: args.apiKeyHash,
+      name: args.name,
+      created_at: Date.now(),
+    });
+  },
+});
+
