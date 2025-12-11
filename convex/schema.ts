@@ -55,6 +55,7 @@ export default defineSchema({
       v.literal("REQUIRE_APPROVAL"),
     ),                                              // Rule action type
     priority: v.optional(v.number()),               // Priority (higher = first match)
+    cost: v.optional(v.number()),                   // Cost in credits (optional, for dynamic pricing)
     created_by: v.id("users"),                      // Foreign key to users (creator)
     created_at: v.number(),                         // Creation timestamp
     enabled: v.boolean(),                           // Whether rule is enabled

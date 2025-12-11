@@ -10,9 +10,11 @@
 
 import type * as admin from "../admin.js";
 import type * as auth from "../auth.js";
+import type * as commands from "../commands.js";
 import type * as http from "../http.js";
 import type * as lib_api_key from "../lib/api_key.js";
 import type * as myFunctions from "../myFunctions.js";
+import type * as rules from "../rules.js";
 import type * as seed from "../seed.js";
 import type * as users from "../users.js";
 
@@ -25,9 +27,11 @@ import type {
 declare const fullApi: ApiFromModules<{
   admin: typeof admin;
   auth: typeof auth;
+  commands: typeof commands;
   http: typeof http;
   "lib/api_key": typeof lib_api_key;
   myFunctions: typeof myFunctions;
+  rules: typeof rules;
   seed: typeof seed;
   users: typeof users;
 }>;

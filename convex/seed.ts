@@ -4,6 +4,7 @@ import { generateApiKey, hashApiKey } from "./lib/api_key";
 
 export const seedAdmin = internalAction({
   args: {},
+  returns: v.null(),
   handler: async (ctx) => {
     const existing = await ctx.runQuery(internal.users.getUserByEmail, { email: "admin@example.com" });
     if (existing) {

@@ -3,6 +3,7 @@ import { v } from "convex/values";
 
 export const getUserByApiKey = internalQuery({
   args: { apiKeyHash: v.string() },
+  returns: v.union(v.any(), v.null()),
   handler: async (ctx, args) => {
     return await ctx.db
       .query("users")
@@ -13,6 +14,7 @@ export const getUserByApiKey = internalQuery({
 
 export const getUserByEmail = internalQuery({
   args: { email: v.string() },
+  returns: v.union(v.any(), v.null()),
   handler: async (ctx, args) => {
     return await ctx.db
       .query("users")
@@ -28,6 +30,7 @@ export const createUser = internalMutation({
     apiKeyHash: v.string(),
     name: v.optional(v.string()),
   },
+  returns: v.id("users"),
   handler: async (ctx, args) => {
     return await ctx.db.insert("users", {
       email: args.email,
@@ -36,6 +39,41 @@ export const createUser = internalMutation({
       name: args.name,
       created_at: Date.now(),
     });
+  },
+});
+
+// Get current user details and credit balance
+export const getMe = internalQuery({
+  args: { userId: v.id("users") },
+  returns: v.union(
+    v.object({
+      id: v.id("users"),
+      email: v.optional(v.string()),
+      name: v.optional(v.string()),
+      role: v.optional(v.union(v.literal("admin"), v.literal("member"))),
+      credits: v.number(),
+    }),
+    v.null()
+  ),
+  handler: async (ctx, args) => {
+    const user = await ctx.db.get(args.userId);
+    if (!user) {
+      return null;
+    }
+
+    // Get credit balance
+    const creditDoc = await ctx.db
+      .query("user_credits")
+      .withIndex("by_user_id", (q) => q.eq("user_id", args.userId))
+      .unique();
+
+    return {
+      id: user._id,
+      email: user.email,
+      name: user.name,
+      role: user.role,
+      credits: creditDoc?.balance ?? 0,
+    };
   },
 });
 
