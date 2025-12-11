@@ -17,6 +17,10 @@ PS C:\Users\rajes\OneDrive\Desktop\unbound>    npx convex run seed:seedAdmin
 PS C:\Users\rajes\OneDrive\Desktop\unbound> 
 
 
+![Command Gateway](./public/image1.png)
+![Command Gateway](./public/image2.png)
+![Command Gateway](./public/image.png)
+
 
 
 
