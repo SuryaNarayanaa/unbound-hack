@@ -1,8 +1,9 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
+import { useQuery, useMutation } from "convex/react";
+import { api } from "@/convex/_generated/api";
 import { useAuth } from "@/contexts/AuthContext";
-import { apiClient } from "@/lib/apiClient";
 import { User } from "@/types";
 import { useToast } from "@/contexts/ToastContext";
 import { Button } from "@/components/ui/Button";
@@ -13,52 +14,46 @@ import { Badge } from "@/components/ui/Badge";
 import { Modal } from "@/components/ui/Modal";
 import { format } from "date-fns";
 import { UserPlus, Settings, DollarSign, Copy } from "lucide-react";
+import { Id } from "@/convex/_generated/dataModel";
 
 export default function UsersPage() {
-  const { user } = useAuth();
+  const { user, apiKey } = useAuth();
   const { addToast } = useToast();
   
-  const [users, setUsers] = useState<User[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const users = useQuery(
+    api.queries.listUsers,
+    apiKey ? { apiKey } : "skip"
+  ) || [];
+  const isLoading = users === undefined;
+
+  const createUser = useMutation(api.queries.createUser);
+  const adjustCredits = useMutation(api.queries.adjustCredits);
 
   // Create User Modal State
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
-  const [newUser, setNewUser] = useState({ name: "", role: "member", initialCredits: 100 });
+  const [newUser, setNewUser] = useState({ name: "", role: "member" as "admin" | "member", initialCredits: 100 });
   const [generatedKey, setGeneratedKey] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Credit Adjustment Modal State
   const [creditModalUser, setCreditModalUser] = useState<User | null>(null);
   const [creditAmount, setCreditAmount] = useState(0);
   const [creditReason, setCreditReason] = useState("");
-  const [isSubmitting, setIsSubmitting] = useState(false);
-
-  useEffect(() => {
-    if (user && user.role !== "admin") {
-       // redirect handled by layout/context usually, but safe to guard
-    }
-    fetchUsers();
-  }, [user]);
-
-  const fetchUsers = async () => {
-    setIsLoading(true);
-    try {
-      const data = await apiClient.get<User[]>("/users");
-      setUsers(data);
-    } catch (error) {
-      console.error("Failed to fetch users:", error);
-      addToast("Failed to load users", "error");
-    } finally {
-      setIsLoading(false);
-    }
-  };
 
   const handleCreateUser = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!apiKey) return;
+    
     setIsSubmitting(true);
     try {
-      const result: any = await apiClient.post("/users", newUser);
+      const result: any = await createUser({
+        apiKey,
+        email: `${newUser.name.toLowerCase().replace(/\s+/g, ".")}@example.com`,
+        name: newUser.name,
+        role: newUser.role,
+        initialCredits: newUser.initialCredits,
+      });
       setGeneratedKey(result.apiKey);
-      fetchUsers();
       addToast("User created successfully", "success");
     } catch (error: any) {
       addToast(error.message || "Failed to create user", "error");
@@ -69,19 +64,20 @@ export default function UsersPage() {
 
   const handleCreditAdjustment = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!creditModalUser) return;
+    if (!creditModalUser || !apiKey) return;
     
     setIsSubmitting(true);
     try {
-      await apiClient.post(`/users/${creditModalUser.id}/credits`, {
+      await adjustCredits({
+        apiKey,
+        userId: creditModalUser.id as Id<"users">,
         amount: creditAmount,
-        reason: creditReason
+        reason: creditReason,
       });
       addToast("Credits adjusted successfully", "success");
       setCreditModalUser(null);
       setCreditAmount(0);
       setCreditReason("");
-      fetchUsers();
     } catch (error: any) {
       addToast(error.message || "Failed to adjust credits", "error");
     } finally {
@@ -126,7 +122,7 @@ export default function UsersPage() {
               ) : users.length === 0 ? (
                 <TableRow><TableCell colSpan={5} className="text-center h-24 text-slate-500">No users found.</TableCell></TableRow>
               ) : (
-                users.map((u) => (
+                users.map((u: any) => (
                   <TableRow key={u.id}>
                     <TableCell className="font-medium">{u.name}</TableCell>
                     <TableCell>
@@ -210,7 +206,7 @@ export default function UsersPage() {
               <select 
                 className="flex h-10 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-950"
                 value={newUser.role}
-                onChange={(e) => setNewUser({...newUser, role: e.target.value})}
+                onChange={(e) => setNewUser({...newUser, role: e.target.value as "admin" | "member"})}
               >
                 <option value="member">Member</option>
                 <option value="admin">Admin</option>

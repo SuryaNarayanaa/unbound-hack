@@ -1,8 +1,9 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useMemo } from "react";
+import { useQuery, useMutation } from "convex/react";
+import { api } from "@/convex/_generated/api";
 import { useAuth } from "@/contexts/AuthContext";
-import { apiClient } from "@/lib/apiClient";
 import { Rule } from "@/types";
 import { useToast } from "@/contexts/ToastContext";
 import { Button } from "@/components/ui/Button";
@@ -11,13 +12,25 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter }
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/Table";
 import { Badge } from "@/components/ui/Badge";
 import { Edit, AlertTriangle } from "lucide-react";
+import { Id } from "@/convex/_generated/dataModel";
 
 export default function RulesPage() {
-  const { user } = useAuth();
+  const { user, apiKey } = useAuth();
   const { addToast } = useToast();
   
-  const [rules, setRules] = useState<Rule[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const allRules = useQuery(
+    api.queries.listRules,
+    apiKey ? { apiKey } : "skip"
+  ) || [];
+  
+  const rules = useMemo(() => {
+    return [...allRules].sort((a: any, b: any) => (b.priority || 0) - (a.priority || 0));
+  }, [allRules]);
+  
+  const isLoading = allRules === undefined;
+
+  const createRule = useMutation(api.queries.createRule);
+  const updateRule = useMutation(api.queries.updateRule);
 
   // Form state
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -28,26 +41,6 @@ export default function RulesPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [regexError, setRegexError] = useState<string | null>(null);
   const [conflictWarning, setConflictWarning] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (user && user.role !== "admin") {
-      // Should handle redirect or show access denied
-    }
-    fetchRules();
-  }, [user]);
-
-  const fetchRules = async () => {
-    setIsLoading(true);
-    try {
-      const data = await apiClient.get<Rule[]>("/rules");
-      setRules(data.sort((a, b) => b.priority - a.priority));
-    } catch (error) {
-      console.error("Failed to fetch rules:", error);
-      addToast("Failed to load rules", "error");
-    } finally {
-      setIsLoading(false);
-    }
-  };
 
   const validateRegex = (pat: string) => {
     try {
@@ -83,22 +76,32 @@ export default function RulesPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!validateRegex(pattern)) return;
+    if (!validateRegex(pattern) || !apiKey) return;
 
     setIsSubmitting(true);
     try {
-      const payload = { pattern, action, priority, enabled };
-      
       if (editingId) {
-        await apiClient.patch(`/rules/${editingId}`, payload);
+        await updateRule({
+          apiKey,
+          ruleId: editingId as Id<"rules">,
+          pattern,
+          action,
+          priority,
+          enabled,
+        });
         addToast("Rule updated successfully", "success");
       } else {
-        await apiClient.post("/rules", payload);
+        await createRule({
+          apiKey,
+          pattern,
+          action,
+          priority,
+          enabled,
+        });
         addToast("Rule created successfully", "success");
       }
       
       resetForm();
-      fetchRules();
     } catch (error: any) {
       addToast(error.message || "Operation failed", "error");
     } finally {
@@ -128,9 +131,13 @@ export default function RulesPage() {
   };
 
   const toggleRule = async (rule: Rule) => {
+    if (!apiKey) return;
     try {
-      await apiClient.patch(`/rules/${rule._id}`, { enabled: !rule.enabled });
-      setRules(rules.map(r => r._id === rule._id ? { ...r, enabled: !r.enabled } : r));
+      await updateRule({
+        apiKey,
+        ruleId: rule._id as Id<"rules">,
+        enabled: !rule.enabled,
+      });
       addToast(`Rule ${!rule.enabled ? "enabled" : "disabled"}`, "success");
     } catch (error) {
       addToast("Failed to update rule", "error");

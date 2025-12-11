@@ -1,13 +1,14 @@
 "use client";
 
 import React, { createContext, useContext, useEffect, useState } from "react";
-import { apiClient } from "@/lib/apiClient";
-import { useRouter, usePathname } from "next/navigation";
+import { useQuery } from "convex/react";
+import { api } from "@/convex/_generated/api";
+import { useRouter } from "next/navigation";
 
 interface User {
   id: string;
-  name: string;
-  role: "admin" | "member";
+  name: string | undefined;
+  role: "admin" | "member" | undefined;
   credits: number;
 }
 
@@ -17,80 +18,71 @@ interface AuthContextType {
   isLoading: boolean;
   login: (key: string, remember: boolean) => Promise<void>;
   logout: () => void;
-  refreshUser: () => Promise<void>;
+  refreshUser: () => void;
+  apiKey: string | null;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [apiKey, setApiKey] = useState<string | null>(null);
   const router = useRouter();
-  const pathname = usePathname();
 
-  const fetchUser = async () => {
-    try {
-      const userData = await apiClient.get<User>("/me");
-      setUser(userData);
-      return true;
-    } catch (error) {
-      console.error("Failed to fetch user:", error);
-      setUser(null);
-      return false;
-    }
-  };
-
+  // Load API key from localStorage on mount
   useEffect(() => {
-    const initAuth = async () => {
-      const storedKey = localStorage.getItem("command_gateway_api_key");
-      if (storedKey) {
-        apiClient.setApiKey(storedKey);
-        const success = await fetchUser();
-        if (!success) {
-           apiClient.clearApiKey();
-        }
-      }
-      setIsLoading(false);
-    };
-
-    initAuth();
+    const storedKey = localStorage.getItem("command_gateway_api_key");
+    if (storedKey) {
+      setApiKey(storedKey);
+    }
   }, []);
 
-  const login = async (key: string, remember: boolean) => {
-    setIsLoading(true);
-    apiClient.setApiKey(key); // logic in client handles storage based on direct call, but we might want to be explicit about 'remember'
-    
-    if (!remember) {
-        // If not remember, we might want to clear it from local storage on unload, 
-        // but for simplicity we'll just use the client's default behavior which is currently to set it.
-        // If we want to strictly support "don't remember", we would need to adjust apiClient to support memory-only storage.
-        // For this task, we'll assume the client's behavior is acceptable or we'd modify it.
-        // Let's just stick to the client implementation for now.
-    }
+  // Fetch user using Convex query
+  const userData = useQuery(
+    api.queries.getMe,
+    apiKey ? { apiKey } : "skip"
+  );
 
-    try {
-      await fetchUser();
-      router.push("/dashboard");
-    } catch (error) {
-      apiClient.clearApiKey();
-      throw error;
-    } finally {
-      setIsLoading(false);
+  const isLoading = apiKey !== null && userData === undefined;
+
+  // Clear API key if query fails (invalid key)
+  useEffect(() => {
+    if (apiKey && userData === null && !isLoading) {
+      // Query returned null, which means invalid API key
+      setApiKey(null);
+      localStorage.removeItem("command_gateway_api_key");
     }
+  }, [apiKey, userData, isLoading]);
+
+  const login = async (key: string, remember: boolean) => {
+    if (remember) {
+      localStorage.setItem("command_gateway_api_key", key);
+    }
+    setApiKey(key);
+    // Wait a bit for the query to execute
+    await new Promise(resolve => setTimeout(resolve, 100));
+    router.push("/dashboard");
   };
 
   const logout = () => {
-    apiClient.clearApiKey();
-    setUser(null);
+    setApiKey(null);
+    localStorage.removeItem("command_gateway_api_key");
     router.push("/");
   };
 
-  const refreshUser = async () => {
-    await fetchUser();
+  const refreshUser = () => {
+    // Convex queries automatically refetch, but we can trigger a refetch by updating the key
+    // For now, just rely on automatic refetching
   };
 
+  const user: User | null = userData ? {
+    id: userData.id,
+    name: userData.name || "",
+    role: userData.role || "member",
+    credits: userData.credits,
+  } : null;
+
   return (
-    <AuthContext.Provider value={{ user, isAuthenticated: !!user, isLoading, login, logout, refreshUser }}>
+    <AuthContext.Provider value={{ user, isAuthenticated: !!user, isLoading, login, logout, refreshUser, apiKey }}>
       {children}
     </AuthContext.Provider>
   );

@@ -1,8 +1,9 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useMemo } from "react";
+import { useQuery } from "convex/react";
+import { api } from "@/convex/_generated/api";
 import { useAuth } from "@/contexts/AuthContext";
-import { apiClient } from "@/lib/apiClient";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Command } from "@/types";
 import { Badge } from "@/components/ui/Badge";
@@ -11,40 +12,23 @@ import { format } from "date-fns";
 import { Activity, Ban, CheckCircle, Clock } from "lucide-react";
 
 export default function DashboardPage() {
-  const { user } = useAuth();
-  const [recentCommands, setRecentCommands] = useState<Command[]>([]);
-  const [stats, setStats] = useState({
-    total: 0,
-    executed: 0,
-    rejected: 0,
-    pending: 0,
-  });
-  const [loading, setLoading] = useState(true);
+  const { user, apiKey } = useAuth();
+  
+  const commands = useQuery(
+    api.queries.listCommands,
+    apiKey ? { apiKey } : "skip"
+  ) || [];
 
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        // Fetch recent commands - assuming the API supports limit or we slice it
-        const commands = await apiClient.get<Command[]>("/commands");
-        
-        // Calculate stats client-side since we might not have a stats endpoint
-        // In a real app with pagination, we'd need a dedicated stats endpoint
-        const total = commands.length;
-        const executed = commands.filter(c => c.status === "executed").length;
-        const rejected = commands.filter(c => c.status === "rejected").length;
-        const pending = commands.filter(c => c.status === "needs_approval" || c.status === "pending").length;
-        
-        setStats({ total, executed, rejected, pending });
-        setRecentCommands(commands.slice(0, 5));
-      } catch (error) {
-        console.error("Failed to fetch dashboard data:", error);
-      } finally {
-        setLoading(false);
-      }
-    };
+  const stats = useMemo(() => {
+    const total = commands.length;
+    const executed = commands.filter((c: any) => c.status === "executed").length;
+    const rejected = commands.filter((c: any) => c.status === "rejected").length;
+    const pending = commands.filter((c: any) => c.status === "needs_approval" || c.status === "pending").length;
+    return { total, executed, rejected, pending };
+  }, [commands]);
 
-    fetchData();
-  }, []);
+  const recentCommands = useMemo(() => commands.slice(0, 5), [commands]);
+  const loading = commands === undefined;
 
   if (loading) {
     return <div className="p-8">Loading dashboard...</div>;
@@ -126,7 +110,7 @@ export default function DashboardPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {recentCommands.map((cmd) => (
+                {recentCommands.map((cmd: any) => (
                   <TableRow key={cmd._id}>
                     <TableCell className="font-mono text-xs">{cmd.command_text.substring(0, 50)}{cmd.command_text.length > 50 ? '...' : ''}</TableCell>
                     <TableCell>

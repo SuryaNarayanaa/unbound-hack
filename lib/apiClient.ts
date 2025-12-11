@@ -1,5 +1,6 @@
 // Simple API client wrapper
-export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"; // Default to a common backend port or relative
+// Use Convex URL if API_URL is not explicitly set (Convex HTTP routes are accessed via the Convex deployment URL)
+export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || process.env.NEXT_PUBLIC_CONVEX_URL || "http://localhost:3000";
 
 interface ApiRequestOptions extends RequestInit {
   params?: Record<string, string | number | undefined>;

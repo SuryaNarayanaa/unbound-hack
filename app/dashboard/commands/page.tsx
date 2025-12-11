@@ -1,8 +1,9 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useMemo } from "react";
+import { useQuery, useMutation } from "convex/react";
+import { api } from "@/convex/_generated/api";
 import { useAuth } from "@/contexts/AuthContext";
-import { apiClient } from "@/lib/apiClient";
 import { Command } from "@/types";
 import { useToast } from "@/contexts/ToastContext";
 import { Button } from "@/components/ui/Button";
@@ -14,64 +15,49 @@ import { format } from "date-fns";
 import { RefreshCw, Filter } from "lucide-react";
 
 export default function CommandsPage() {
-  const { user, refreshUser } = useAuth();
+  const { user, refreshUser, apiKey } = useAuth();
   const { addToast } = useToast();
   
   // Submit state
   const [commandText, setCommandText] = useState("");
-  const [isSubmitting, setIsSubmitting] = useState(false);
-
-  // History state
-  const [commands, setCommands] = useState<Command[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState<string>("all");
   
-  const fetchCommands = useCallback(async () => {
-    setIsLoading(true);
-    try {
-      const params: Record<string, string> = {};
-      if (statusFilter !== "all") {
-        params.status = statusFilter;
-      }
-      
-      const data = await apiClient.get<Command[]>("/commands", params);
-      setCommands(data);
-    } catch (error) {
-      console.error("Failed to fetch commands:", error);
-      addToast("Failed to load command history", "error");
-    } finally {
-      setIsLoading(false);
-    }
-  }, [statusFilter, addToast]);
+  const submitCommand = useMutation(api.queries.submitCommand);
+  
+  const allCommands = useQuery(
+    api.queries.listCommands,
+    apiKey ? { apiKey } : "skip"
+  ) || [];
 
-  useEffect(() => {
-    fetchCommands();
-  }, [fetchCommands]);
+  const commands = useMemo(() => {
+    if (statusFilter === "all") return allCommands;
+    return allCommands.filter((c: any) => c.status === statusFilter);
+  }, [allCommands, statusFilter]);
+
+  const isLoading = allCommands === undefined;
 
   const handleSubmit = async () => {
-    if (!commandText.trim()) return;
+    if (!commandText.trim() || !apiKey) return;
 
-    setIsSubmitting(true);
     try {
-      const result: any = await apiClient.post("/commands", { command_text: commandText });
+      const result: any = await submitCommand({
+        apiKey,
+        commandText: commandText.trim(),
+      });
       
       addToast(
         result.status === "executed" 
           ? "Command executed successfully" 
           : result.status === "rejected" 
-          ? `Command rejected: ${result.rejection_reason || "Unknown reason"}`
+          ? `Command rejected: ${result.reason || "Unknown reason"}`
           : "Command submitted for approval",
         result.status === "executed" ? "success" : result.status === "rejected" ? "error" : "info"
       );
 
       setCommandText("");
-      // Refresh history and user credits
-      fetchCommands();
       refreshUser();
     } catch (error: any) {
       addToast(error.message || "Failed to submit command", "error");
-    } finally {
-      setIsSubmitting(false);
     }
   };
 
@@ -97,8 +83,7 @@ export default function CommandsPage() {
             </div>
           <Button 
             onClick={handleSubmit} 
-            disabled={isSubmitting || !commandText.trim()}
-            isLoading={isSubmitting}
+            disabled={!commandText.trim() || !apiKey}
           >
             Submit Command
           </Button>
@@ -122,7 +107,7 @@ export default function CommandsPage() {
                     <option value="needs_approval">Needs Approval</option>
                 </select>
             </div>
-            <Button variant="outline" size="sm" onClick={fetchCommands} disabled={isLoading}>
+            <Button variant="outline" size="sm" disabled={isLoading}>
               <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
             </Button>
           </div>
@@ -154,7 +139,7 @@ export default function CommandsPage() {
                     </TableCell>
                   </TableRow>
                 ) : (
-                  commands.map((cmd) => (
+                  commands.map((cmd: any) => (
                     <TableRow key={cmd._id}>
                       <TableCell className="font-mono text-xs">
                         {cmd.command_text}
