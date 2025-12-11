@@ -120,8 +120,16 @@ http.route({
   method: "PATCH",
   handler: authenticatedRoute(async (ctx, req, user) => {
     const url = new URL(req.url);
-    const pathParts = url.pathname.split("/");
-    const userId = pathParts[pathParts.length - 2] as Id<"users">; // userId is second-to-last segment
+    // Extract userId from path: /api/users/{userId}/credits
+    // More robust parsing: match the pattern and extract userId
+    const pathMatch = url.pathname.match(/^\/api\/users\/([^\/]+)\/credits$/);
+    if (!pathMatch || !pathMatch[1]) {
+      return new Response(JSON.stringify({ error: "Invalid user ID in path" }), {
+        status: 400,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+    const userId = pathMatch[1] as Id<"users">;
     const body = await req.json();
     
     await ctx.runMutation(internal.admin.adjustCredits, {

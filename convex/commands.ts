@@ -13,8 +13,10 @@ export const submitCommand = internalMutation({
   handler: async (ctx, args) => {
     try {
       // 1. Start transaction: Load user row (for safety) and user_credits
-      // Note: Convex mutations are atomic, so we don't need explicit FOR UPDATE
-      // but we load both to ensure user exists and get current balance
+      // Note: Convex mutations are atomic transactions - all database operations in this handler
+      // are executed atomically. If any operation fails, the entire mutation rolls back.
+      // This provides ACID guarantees similar to explicit FOR UPDATE locking in traditional SQL.
+      // We load both user and credits to ensure user exists and get current balance.
       const user = await ctx.db.get(args.userId);
       if (!user) {
         throw new Error("User not found");
@@ -27,7 +29,8 @@ export const submitCommand = internalMutation({
 
       const currentBalance = creditDoc?.balance ?? 0;
 
-      // 2. Early balance check: If balance <= 0, reject immediately (before rule matching)
+      // 2. Early balance check: If balance <= 0, reject immediately (optimization before rule matching)
+      // This avoids unnecessary rule matching when user has no credits
       if (currentBalance <= 0) {
         // Create command with rejected status
         const commandId = await ctx.db.insert("commands", {
@@ -87,8 +90,9 @@ export const submitCommand = internalMutation({
       });
 
       // 4. Match command_text against rule patterns
+      // If no rule matches, default to AUTO_REJECT (as per requirements: "treat as AUTO_REJECT or needs manual decision")
       let matchedRule = null;
-      let action: "AUTO_ACCEPT" | "AUTO_REJECT" | "REQUIRE_APPROVAL" = "REQUIRE_APPROVAL";
+      let action: "AUTO_ACCEPT" | "AUTO_REJECT" | "REQUIRE_APPROVAL" = "AUTO_REJECT";
       let cost = 1; // Default cost
 
       for (const rule of sortedRules) {
@@ -120,7 +124,9 @@ export const submitCommand = internalMutation({
         }
       }
 
-      // 5. Check if user has sufficient credits (reject when credits = 0 or insufficient for cost)
+      // 5. Check if user has sufficient credits after determining cost from matched rule
+      // This is the primary balance check as per requirements - check balance after rule matching
+      // when we know the actual cost. The early check above is just an optimization.
       if (currentBalance <= 0 || currentBalance < cost) {
         // Create command with rejected status
         const commandId = await ctx.db.insert("commands", {
@@ -207,7 +213,9 @@ export const submitCommand = internalMutation({
         cost: cost,
         created_at: Date.now(),
         executed_at: status === "executed" ? Date.now() : undefined,
-        rejection_reason: status === "rejected" ? "Matched rule with AUTO_REJECT action" : undefined,
+        rejection_reason: status === "rejected" 
+          ? (matchedRule ? "Matched rule with AUTO_REJECT action" : "No matching rule found - default AUTO_REJECT")
+          : undefined,
         output: mockedOutput,
       });
 
@@ -249,7 +257,9 @@ export const submitCommand = internalMutation({
             command_text: args.commandText,
             matched_rule_id: matchedRule?._id,
             action: action,
-            rejection_reason: "Matched rule with AUTO_REJECT action",
+            rejection_reason: matchedRule 
+              ? "Matched rule with AUTO_REJECT action" 
+              : "No matching rule found - default AUTO_REJECT",
           },
           created_at: Date.now(),
         });
