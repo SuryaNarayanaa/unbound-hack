@@ -84,6 +84,29 @@ http.route({
       name: body.name,
       role: body.role || "member",
     });
+    
+    // Create audit log for user creation
+    await ctx.runMutation(internal.admin.createAuditLog, {
+      userId: result.userId,
+      eventType: "USER_CREATED",
+      details: {
+        created_by: user._id,
+        email: body.email,
+        name: body.name,
+        role: body.role || "member",
+        initial_credits: body.initialCredits ?? 0,
+      },
+    });
+    
+    // Set initial credits if provided
+    if (body.initialCredits !== undefined && body.initialCredits > 0) {
+      await ctx.runMutation(internal.admin.adjustCredits, {
+        userId: result.userId,
+        amount: body.initialCredits,
+        reason: "initial_credits",
+      });
+    }
+    
     return new Response(JSON.stringify(result), {
       status: 200,
       headers: { "Content-Type": "application/json" },

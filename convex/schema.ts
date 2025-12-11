@@ -80,6 +80,7 @@ export default defineSchema({
     created_at: v.number(),                         // Creation timestamp
     executed_at: v.optional(v.number()),            // Execution timestamp (nullable)
     rejection_reason: v.optional(v.string()),       // Rejection reason (nullable)
+    output: v.optional(v.string()),                 // Mocked execution output (nullable)
   })
     .index("by_user_id", ["user_id"])              // For user command queries
     .index("by_status", ["status"])                // For status-based queries

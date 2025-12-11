@@ -8,6 +8,7 @@ export interface Command {
   created_at: number;
   executed_at?: number;
   rejection_reason?: string;
+  output?: string;
 }
 
 export interface Rule {
