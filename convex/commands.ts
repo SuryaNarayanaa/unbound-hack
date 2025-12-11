@@ -36,7 +36,20 @@ export const submitCommand = internalMutation({
     for (const rule of sortedRules) {
       try {
         const regex = new RegExp(rule.pattern);
-        if (regex.test(args.commandText)) {
+        // For patterns starting with ^, use match to ensure it matches from the start
+        // For other patterns, use test to search anywhere in the string
+        let isMatch = false;
+        if (rule.pattern.startsWith("^")) {
+          // Use match to ensure pattern matches from the beginning of the string
+          // When pattern starts with ^, match() only returns non-null if it matches from index 0
+          const match = args.commandText.match(regex);
+          isMatch = match !== null && match.index === 0;
+        } else {
+          // Use test to search anywhere in the string
+          isMatch = regex.test(args.commandText);
+        }
+        
+        if (isMatch) {
           matchedRule = rule;
           action = rule.action;
           cost = rule.cost ?? 1; // Use rule cost if specified, otherwise default to 1

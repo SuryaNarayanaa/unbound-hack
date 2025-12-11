@@ -111,11 +111,26 @@ export const createUser = mutation({
       role: args.role,
     });
     
+    // Create audit log for user creation
+    // user_id is the created user, creator is stored in details
+    await ctx.runMutation(internal.admin.createAuditLog, {
+      userId: result.userId, // The user who was created
+      eventType: "USER_CREATED",
+      details: {
+        created_by: user._id, // The admin who created the user
+        email: args.email,
+        name: args.name,
+        role: args.role,
+        initial_credits: args.initialCredits ?? 0,
+      },
+    });
+    
     // Set initial credits if provided
     if (args.initialCredits !== undefined && args.initialCredits > 0) {
       await ctx.runMutation(internal.admin.adjustCredits, {
         userId: result.userId,
         amount: args.initialCredits,
+        reason: "initial_credits",
       });
     }
     
@@ -142,6 +157,7 @@ export const adjustCredits = mutation({
     await ctx.runMutation(internal.admin.adjustCredits, {
       userId: args.userId,
       amount: args.amount,
+      reason: args.reason ?? "manual_adjustment",
     });
     
     return null;
@@ -178,8 +194,8 @@ export const createRule = mutation({
     // Validate regex pattern
     try {
       new RegExp(args.pattern);
-    } catch (error) {
-      throw new Error("Invalid regex pattern");
+    } catch (error: any) {
+      throw new Error(`Invalid regex pattern: ${error.message}`);
     }
     
     const ruleId: any = await ctx.runMutation(internal.admin.createRule, {
@@ -191,7 +207,7 @@ export const createRule = mutation({
       cost: args.cost,
     });
     
-    // Create audit log
+    // Create audit log with pattern and action
     await ctx.runMutation(internal.admin.createAuditLog, {
       userId: user._id,
       eventType: "RULE_CREATED",
@@ -228,12 +244,21 @@ export const updateRule = mutation({
     const user = await authenticateUser(ctx, args.apiKey);
     checkRole(user, "admin");
     
+    // Get current rule to include in audit log
+    const currentRule: any = await ctx.runQuery(internal.rules.getRule, {
+      ruleId: args.ruleId,
+    });
+    
+    if (!currentRule) {
+      throw new Error("Rule not found");
+    }
+    
     // Validate regex pattern if provided
     if (args.pattern) {
       try {
         new RegExp(args.pattern);
-      } catch (error) {
-        throw new Error("Invalid regex pattern");
+      } catch (error: any) {
+        throw new Error(`Invalid regex pattern: ${error.message}`);
       }
     }
     
@@ -246,12 +271,14 @@ export const updateRule = mutation({
       cost: args.cost,
     });
     
-    // Create audit log
+    // Create audit log with pattern and action
     await ctx.runMutation(internal.admin.createAuditLog, {
       userId: user._id,
       eventType: "RULE_UPDATED",
       details: {
         rule_id: args.ruleId,
+        pattern: args.pattern ?? currentRule.pattern,
+        action: args.action ?? currentRule.action,
         updates: {
           pattern: args.pattern,
           action: args.action,
@@ -277,16 +304,27 @@ export const deleteRule = mutation({
     const user = await authenticateUser(ctx, args.apiKey);
     checkRole(user, "admin");
     
+    // Get rule details before deletion for audit log
+    const rule: any = await ctx.runQuery(internal.rules.getRule, {
+      ruleId: args.ruleId,
+    });
+    
+    if (!rule) {
+      throw new Error("Rule not found");
+    }
+    
     await ctx.runMutation(internal.rules.deleteRule, {
       ruleId: args.ruleId,
     });
     
-    // Create audit log
+    // Create audit log with pattern and action
     await ctx.runMutation(internal.admin.createAuditLog, {
       userId: user._id,
       eventType: "RULE_DELETED",
       details: {
         rule_id: args.ruleId,
+        pattern: rule.pattern,
+        action: rule.action,
       },
     });
     

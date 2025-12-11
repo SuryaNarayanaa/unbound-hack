@@ -109,5 +109,6 @@ export default defineSchema({
     .index("by_user_id", ["user_id"])              // For user audit queries
     .index("by_event_type", ["event_type"])        // For event type queries
     .index("by_user_id_and_event_type", ["user_id", "event_type"]) // For combined queries
-    .index("by_command_id", ["command_id"]),       // For command-related audit logs
+    .index("by_command_id", ["command_id"])        // For command-related audit logs
+    .index("by_created_at", ["created_at"]),       // For time-based queries
 });

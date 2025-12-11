@@ -138,8 +138,8 @@ http.route({
     // Validate regex pattern
     try {
       new RegExp(body.pattern);
-    } catch (error) {
-      return new Response(JSON.stringify({ error: "Invalid regex pattern" }), {
+    } catch (error: any) {
+      return new Response(JSON.stringify({ error: `Invalid regex pattern: ${error.message}` }), {
         status: 400,
         headers: { "Content-Type": "application/json" },
       });
@@ -187,8 +187,8 @@ http.route({
     if (body.pattern) {
       try {
         new RegExp(body.pattern);
-      } catch (error) {
-        return new Response(JSON.stringify({ error: "Invalid regex pattern" }), {
+      } catch (error: any) {
+        return new Response(JSON.stringify({ error: `Invalid regex pattern: ${error.message}` }), {
           status: 400,
           headers: { "Content-Type": "application/json" },
         });

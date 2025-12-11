@@ -53,10 +53,13 @@ export const createRule = internalMutation({
   },
   returns: v.id("rules"),
   handler: async (ctx, args) => {
+    // Ensure priority is explicitly set (default to 0 if somehow not provided)
+    const priority = args.priority ?? 0;
+    
     return await ctx.db.insert("rules", {
       pattern: args.pattern,
       action: args.action,
-      priority: args.priority,
+      priority: priority,
       enabled: args.enabled,
       created_by: args.creatorId,
       created_at: Date.now(),
@@ -69,6 +72,7 @@ export const adjustCredits = internalMutation({
   args: {
     userId: v.id("users"),
     amount: v.number(), // positive to add, negative to deduct
+    reason: v.optional(v.string()), // Reason for credit change
   },
   returns: v.null(),
   handler: async (ctx, args) => {
@@ -93,14 +97,14 @@ export const adjustCredits = internalMutation({
         });
     }
 
-    // Create audit log
+    // Create audit log with reason
     await ctx.db.insert("audit_logs", {
       user_id: args.userId,
       event_type: "CREDITS_UPDATED",
       details: {
-        amount: args.amount,
         old_balance: oldBalance,
         new_balance: newBalance,
+        reason: args.reason ?? "manual_adjustment",
       },
       created_at: Date.now(),
     });

@@ -88,6 +88,8 @@ export default function AuditPage() {
                 <option value="COMMAND_EXECUTED">Command Executed</option>
                 <option value="COMMAND_REJECTED">Command Rejected</option>
                 <option value="RULE_CREATED">Rule Created</option>
+                <option value="RULE_UPDATED">Rule Updated</option>
+                <option value="RULE_DELETED">Rule Deleted</option>
                 <option value="USER_CREATED">User Created</option>
                 <option value="CREDITS_UPDATED">Credits Updated</option>
               </select>
