@@ -16,11 +16,18 @@ export const seedAdmin = internalAction({
     const apiKey = generateApiKey();
     const apiKeyHash = await hashApiKey(apiKey);
 
-    await ctx.runMutation(internal.users.createUser, {
+    const userId = await ctx.runMutation(internal.users.createUser, {
       email: "admin@example.com",
       role: "admin",
       apiKeyHash: apiKeyHash,
       name: "Default Admin",
+    });
+
+    // Initialize admin user with 100 credits
+    await ctx.runMutation(internal.admin.adjustCredits, {
+      userId: userId,
+      amount: 100,
+      reason: "initial_credits",
     });
 
     console.log("============================================================");

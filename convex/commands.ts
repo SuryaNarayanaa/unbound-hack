@@ -73,10 +73,17 @@ export const submitCommand = internalMutation({
       const enabledRules: any[] = await ctx.runQuery(internal.rules.getEnabledRules, {});
       
       // Sort by priority descending (higher priority first)
+      // If priorities are equal, sort by created_at ASC (earlier rules win) to enforce "first match wins"
       const sortedRules: any[] = enabledRules.sort((a: any, b: any) => {
         const priorityA = a.priority ?? 0;
         const priorityB = b.priority ?? 0;
-        return priorityB - priorityA;
+        if (priorityA !== priorityB) {
+          return priorityB - priorityA; // Higher priority first
+        }
+        // Tiebreaker: earlier created_at wins (ASC order)
+        const createdA = a.created_at ?? 0;
+        const createdB = b.created_at ?? 0;
+        return createdA - createdB;
       });
 
       // 4. Match command_text against rule patterns
@@ -113,8 +120,8 @@ export const submitCommand = internalMutation({
         }
       }
 
-      // 5. Check if user has sufficient credits for the matched rule cost
-      if (currentBalance < cost) {
+      // 5. Check if user has sufficient credits (reject when credits = 0 or insufficient for cost)
+      if (currentBalance <= 0 || currentBalance < cost) {
         // Create command with rejected status
         const commandId = await ctx.db.insert("commands", {
           user_id: args.userId,
@@ -170,9 +177,9 @@ export const submitCommand = internalMutation({
       }
 
       // 7. Transactionally process command based on action
-      // Only deduct credits for AUTO_ACCEPT actions
+      // Only deduct credits for AUTO_ACCEPT actions (successful execution)
       if (action === "AUTO_ACCEPT") {
-        // Deduct credits before execution
+        // Deduct credits on successful execution (execution is mocked and happens immediately)
         if (creditDoc) {
           await ctx.db.patch(creditDoc._id, {
             balance: creditDoc.balance - cost,

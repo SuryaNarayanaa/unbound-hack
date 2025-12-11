@@ -293,6 +293,19 @@ http.route({
       commandText: body.command_text,
     });
     
+    // Return appropriate HTTP status codes based on command status
+    // 400/403 for rejected commands (especially insufficient credits)
+    if (result.status === "rejected") {
+      const statusCode = result.reason === "INSUFFICIENT_CREDITS" ? 403 : 400;
+      return new Response(JSON.stringify({
+        error: result.reason || "Command rejected",
+        ...result
+      }), {
+        status: statusCode,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+    
     return new Response(JSON.stringify(result), {
       status: 200,
       headers: { "Content-Type": "application/json" },

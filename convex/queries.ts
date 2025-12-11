@@ -121,18 +121,17 @@ export const createUser = mutation({
         email: args.email,
         name: args.name,
         role: args.role,
-        initial_credits: args.initialCredits ?? 0,
+        initial_credits: args.initialCredits ?? 100,
       },
     });
     
-    // Set initial credits if provided
-    if (args.initialCredits !== undefined && args.initialCredits > 0) {
-      await ctx.runMutation(internal.admin.adjustCredits, {
-        userId: result.userId,
-        amount: args.initialCredits,
-        reason: "initial_credits",
-      });
-    }
+    // Set initial credits (default to 100 if not provided)
+    const creditsToAdd = args.initialCredits ?? 100;
+    await ctx.runMutation(internal.admin.adjustCredits, {
+      userId: result.userId,
+      amount: creditsToAdd,
+      reason: "initial_credits",
+    });
     
     return {
       userId: result.userId,
