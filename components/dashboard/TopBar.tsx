@@ -18,7 +18,7 @@ export function TopBar() {
           Welcome, {user.name}
         </h2>
         <Badge variant={user.role === "admin" ? "destructive" : "secondary"}>
-          {user.role.toUpperCase()}
+          {user.role?.toUpperCase() || "MEMBER"}
         </Badge>
       </div>
       <div className="flex items-center gap-6">
