@@ -184,6 +184,25 @@ export const createRule = mutation({
     priority: v.number(),
     enabled: v.boolean(),
     cost: v.optional(v.number()),
+    // Escalation fields
+    escalation_enabled: v.optional(v.boolean()),
+    escalation_delay_ms: v.optional(v.number()),
+    escalation_action: v.optional(v.union(v.literal("AUTO_ACCEPT"), v.literal("AUTO_REJECT"))),
+    // Time-based scheduling fields
+    schedule_type: v.optional(v.union(v.literal("always"), v.literal("time_windows"), v.literal("cron"))),
+    time_windows: v.optional(v.array(v.object({
+      day_of_week: v.number(),
+      start_hour: v.number(),
+      start_minute: v.number(),
+      end_hour: v.number(),
+      end_minute: v.number(),
+      timezone: v.optional(v.string()),
+    }))),
+    cron_expression: v.optional(v.string()),
+    cron_timezone: v.optional(v.string()),
+    restricted_to_user_id: v.optional(v.id("users")),
+    restricted_to_role: v.optional(v.union(v.literal("admin"), v.literal("member"))),
+    voting_threshold: v.optional(v.number()),
   },
   returns: v.id("rules"),
   handler: async (ctx, args) => {
@@ -204,6 +223,15 @@ export const createRule = mutation({
       enabled: args.enabled,
       creatorId: user._id,
       cost: args.cost,
+      escalation_enabled: args.escalation_enabled,
+      escalation_delay_ms: args.escalation_delay_ms,
+      escalation_action: args.escalation_action,
+      schedule_type: args.schedule_type,
+      time_windows: args.time_windows,
+      cron_expression: args.cron_expression,
+      cron_timezone: args.cron_timezone,
+      restricted_to_user_id: args.restricted_to_user_id,
+      restricted_to_role: args.restricted_to_role,
     });
     
     // Create audit log with pattern and action
@@ -216,6 +244,13 @@ export const createRule = mutation({
         action: args.action,
         priority: args.priority,
         cost: args.cost,
+        escalation_enabled: args.escalation_enabled,
+        escalation_delay_ms: args.escalation_delay_ms,
+        escalation_action: args.escalation_action,
+        schedule_type: args.schedule_type,
+        time_windows: args.time_windows,
+        cron_expression: args.cron_expression,
+        cron_timezone: args.cron_timezone,
       },
     });
     
@@ -237,6 +272,25 @@ export const updateRule = mutation({
     priority: v.optional(v.number()),
     enabled: v.optional(v.boolean()),
     cost: v.optional(v.number()),
+    // Escalation fields
+    escalation_enabled: v.optional(v.boolean()),
+    escalation_delay_ms: v.optional(v.number()),
+    escalation_action: v.optional(v.union(v.literal("AUTO_ACCEPT"), v.literal("AUTO_REJECT"))),
+    // Time-based scheduling fields
+    schedule_type: v.optional(v.union(v.literal("always"), v.literal("time_windows"), v.literal("cron"))),
+    time_windows: v.optional(v.array(v.object({
+      day_of_week: v.number(),
+      start_hour: v.number(),
+      start_minute: v.number(),
+      end_hour: v.number(),
+      end_minute: v.number(),
+      timezone: v.optional(v.string()),
+    }))),
+    cron_expression: v.optional(v.string()),
+    cron_timezone: v.optional(v.string()),
+    restricted_to_user_id: v.optional(v.id("users")),
+    restricted_to_role: v.optional(v.union(v.literal("admin"), v.literal("member"))),
+    voting_threshold: v.optional(v.number()),
   },
   returns: v.id("rules"),
   handler: async (ctx, args) => {
@@ -268,6 +322,15 @@ export const updateRule = mutation({
       priority: args.priority,
       enabled: args.enabled,
       cost: args.cost,
+      escalation_enabled: args.escalation_enabled,
+      escalation_delay_ms: args.escalation_delay_ms,
+      escalation_action: args.escalation_action,
+      schedule_type: args.schedule_type,
+      time_windows: args.time_windows,
+      cron_expression: args.cron_expression,
+      cron_timezone: args.cron_timezone,
+      restricted_to_user_id: args.restricted_to_user_id,
+      restricted_to_role: args.restricted_to_role,
     });
     
     // Create audit log with pattern and action
@@ -284,6 +347,13 @@ export const updateRule = mutation({
           priority: args.priority,
           enabled: args.enabled,
           cost: args.cost,
+          escalation_enabled: args.escalation_enabled,
+          escalation_delay_ms: args.escalation_delay_ms,
+          escalation_action: args.escalation_action,
+          schedule_type: args.schedule_type,
+          time_windows: args.time_windows,
+          cron_expression: args.cron_expression,
+          cron_timezone: args.cron_timezone,
         },
       },
     });
@@ -388,7 +458,11 @@ export const getAuditLogs = query({
       v.literal("USER_UPDATED"),
       v.literal("CREDITS_UPDATED"),
       v.literal("RULE_UPDATED"),
-      v.literal("RULE_DELETED")
+      v.literal("RULE_DELETED"),
+      v.literal("COMMAND_ESCALATED"),
+      v.literal("COMMAND_APPROVED"),
+      v.literal("COMMAND_REJECTED_BY_APPROVER"),
+      v.literal("VOTE_CAST")
     )),
     from: v.optional(v.number()),
     to: v.optional(v.number()),
@@ -407,6 +481,141 @@ export const getAuditLogs = query({
       limit: args.limit,
     });
     return result;
+  },
+});
+
+// Get pending approvals (Admin only)
+export const getPendingApprovals = query({
+  args: {
+    apiKey: v.string(),
+  },
+  returns: v.array(v.any()),
+  handler: async (ctx, args): Promise<any[]> => {
+    const user = await authenticateUser(ctx, args.apiKey);
+    checkRole(user, "admin");
+    
+    const commands: any[] = await ctx.runQuery(internal.approvals.getPendingApprovals, {});
+    
+    // Enrich with vote counts
+    const enriched: any[] = await Promise.all(
+      commands.map(async (cmd: any) => {
+        const voteCounts = await ctx.runQuery(internal.approvals.getVoteCounts, {
+          commandId: cmd._id,
+        });
+        const votes = await ctx.runQuery(internal.approvals.getVotesForCommand, {
+          commandId: cmd._id,
+        });
+        return {
+          ...cmd,
+          voteCounts,
+          votes,
+        };
+      })
+    );
+    
+    return enriched;
+  },
+});
+
+// Approve command (Admin only)
+export const approveCommand = mutation({
+  args: {
+    apiKey: v.string(),
+    commandId: v.id("commands"),
+    reason: v.optional(v.string()),
+  },
+  returns: v.id("commands"),
+  handler: async (ctx, args): Promise<any> => {
+    const user = await authenticateUser(ctx, args.apiKey);
+    checkRole(user, "admin");
+    
+    return await ctx.runMutation(internal.approvals.approveCommand, {
+      commandId: args.commandId,
+      approverId: user._id,
+      reason: args.reason,
+    });
+  },
+});
+
+// Reject command (Admin only)
+export const rejectCommand = mutation({
+  args: {
+    apiKey: v.string(),
+    commandId: v.id("commands"),
+    reason: v.string(),
+  },
+  returns: v.id("commands"),
+  handler: async (ctx, args): Promise<any> => {
+    const user = await authenticateUser(ctx, args.apiKey);
+    checkRole(user, "admin");
+    
+    return await ctx.runMutation(internal.approvals.rejectCommand, {
+      commandId: args.commandId,
+      approverId: user._id,
+      reason: args.reason,
+    });
+  },
+});
+
+// Cast vote on command (Admin only)
+export const castVote = mutation({
+  args: {
+    apiKey: v.string(),
+    commandId: v.id("commands"),
+    voteType: v.union(v.literal("approve"), v.literal("reject")),
+  },
+  returns: v.id("votes"),
+  handler: async (ctx, args): Promise<any> => {
+    const user = await authenticateUser(ctx, args.apiKey);
+    checkRole(user, "admin");
+    
+    return await ctx.runMutation(internal.approvals.castVote, {
+      commandId: args.commandId,
+      userId: user._id,
+      voteType: args.voteType,
+    });
+  },
+});
+
+// Get vote counts for a command
+export const getVoteCounts = query({
+  args: {
+    apiKey: v.string(),
+    commandId: v.id("commands"),
+  },
+  returns: v.object({
+    approve: v.number(),
+    reject: v.number(),
+    total: v.number(),
+  }),
+  handler: async (ctx, args): Promise<{ approve: number; reject: number; total: number }> => {
+    const user = await authenticateUser(ctx, args.apiKey);
+    checkRole(user, "admin");
+    
+    return await ctx.runQuery(internal.approvals.getVoteCounts, {
+      commandId: args.commandId,
+    });
+  },
+});
+
+// Detect rule conflicts
+export const detectRuleConflicts = query({
+  args: {
+    apiKey: v.string(),
+    pattern: v.string(),
+    action: v.union(v.literal("AUTO_ACCEPT"), v.literal("AUTO_REJECT"), v.literal("REQUIRE_APPROVAL")),
+    excludeRuleId: v.optional(v.id("rules")),
+  },
+  returns: v.array(v.any()),
+  handler: async (ctx, args): Promise<any[]> => {
+    const user = await authenticateUser(ctx, args.apiKey);
+    checkRole(user, "admin");
+    
+    return await ctx.runQuery(internal.rules.detectConflicts, {
+      pattern: args.pattern,
+      action: args.action,
+      excludeRuleId: args.excludeRuleId,
+    });
   },
 });
 

@@ -22,8 +22,8 @@ export default function DashboardLayout({
 
   if (isLoading) {
     return (
-      <div className="flex h-screen w-full items-center justify-center bg-slate-50">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-slate-200 border-t-slate-900" />
+      <div className="flex h-screen w-full items-center justify-center bg-background">
+        <div className="h-8 w-8 animate-spin rounded-full border-4 border-muted border-t-primary" />
       </div>
     );
   }
@@ -31,7 +31,7 @@ export default function DashboardLayout({
   if (!isAuthenticated) return null;
 
   return (
-    <div className="flex h-screen bg-slate-50">
+    <div className="flex h-screen bg-background">
       <Sidebar />
       <div className="flex flex-1 flex-col overflow-hidden">
         <TopBar />

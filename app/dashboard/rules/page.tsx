@@ -40,7 +40,16 @@ export default function RulesPage() {
   const [enabled, setEnabled] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [regexError, setRegexError] = useState<string | null>(null);
-  const [conflictWarning, setConflictWarning] = useState<string | null>(null);
+  const [restrictedToUserId, setRestrictedToUserId] = useState<string>("");
+  const [restrictedToRole, setRestrictedToRole] = useState<"admin" | "member" | "">("");
+  const [votingThreshold, setVotingThreshold] = useState<number | undefined>(undefined);
+
+  const detectConflicts = useQuery(
+    api.queries.detectRuleConflicts,
+    pattern && apiKey ? { apiKey, pattern, action, excludeRuleId: editingId as Id<"rules"> | undefined } : "skip"
+  );
+
+  const conflictWarning = detectConflicts && detectConflicts.length > 0;
 
   const validateRegex = (pat: string) => {
     try {
@@ -53,24 +62,13 @@ export default function RulesPage() {
     }
   };
 
-  const checkConflict = (pat: string) => {
-    const duplicate = rules.find(r => r.pattern === pat && r._id !== editingId);
-    if (duplicate) {
-        setConflictWarning("A rule with this exact pattern already exists.");
-    } else {
-        setConflictWarning(null);
-    }
-  }
-
   const handlePatternChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value;
     setPattern(val);
     if (val) {
         validateRegex(val);
-        checkConflict(val);
     } else {
         setRegexError(null);
-        setConflictWarning(null);
     }
   };
 
@@ -88,6 +86,9 @@ export default function RulesPage() {
           action,
           priority,
           enabled,
+          restricted_to_user_id: restrictedToUserId ? restrictedToUserId as Id<"users"> : undefined,
+          restricted_to_role: restrictedToRole || undefined,
+          voting_threshold: votingThreshold,
         });
         addToast("Rule updated successfully", "success");
       } else {
@@ -97,6 +98,9 @@ export default function RulesPage() {
           action,
           priority,
           enabled,
+          restricted_to_user_id: restrictedToUserId ? restrictedToUserId as Id<"users"> : undefined,
+          restricted_to_role: restrictedToRole || undefined,
+          voting_threshold: votingThreshold,
         });
         addToast("Rule created successfully", "success");
       }
@@ -116,7 +120,9 @@ export default function RulesPage() {
     setPriority(10);
     setEnabled(true);
     setRegexError(null);
-    setConflictWarning(null);
+    setRestrictedToUserId("");
+    setRestrictedToRole("");
+    setVotingThreshold(undefined);
   };
 
   const handleEdit = (rule: Rule) => {
@@ -126,7 +132,9 @@ export default function RulesPage() {
     setPriority(rule.priority ?? 10);
     setEnabled(rule.enabled ?? true);
     setRegexError(null);
-    setConflictWarning(null); // Don't warn about itself
+    setRestrictedToUserId((rule as any).restricted_to_user_id || "");
+    setRestrictedToRole((rule as any).restricted_to_role || "");
+    setVotingThreshold((rule as any).voting_threshold);
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
@@ -167,11 +175,19 @@ export default function RulesPage() {
                   className={regexError ? "border-red-500" : conflictWarning ? "border-amber-500" : "font-mono"}
                 />
                 {regexError && <p className="text-xs text-red-500">{regexError}</p>}
-                {conflictWarning && !regexError && (
-                    <div className="flex items-center gap-1 text-xs text-amber-600">
-                        <AlertTriangle className="h-3 w-3" />
-                        {conflictWarning}
-                    </div>
+                {detectConflicts && detectConflicts.length > 0 && !regexError && (
+                  <div className="space-y-1">
+                    {detectConflicts.map((conflict: any, idx: number) => (
+                      <div key={idx} className="flex items-start gap-1 text-xs text-amber-600">
+                        <AlertTriangle className="h-3 w-3 mt-0.5 flex-shrink-0" />
+                        <span>
+                          <strong>{conflict.conflictType === "exact_duplicate" ? "Exact duplicate" : 
+                                   conflict.conflictType === "conflicting_action" ? "Conflicting action" : 
+                                   "Overlapping pattern"}</strong>: {conflict.description}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
                 )}
               </div>
               <div className="space-y-2">
@@ -205,6 +221,48 @@ export default function RulesPage() {
                 <label htmlFor="enabled" className="text-sm font-medium">Enabled</label>
               </div>
             </div>
+            
+            {/* User-tier restrictions */}
+            <div className="grid gap-4 md:grid-cols-2 border-t pt-4">
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Restrict to User ID (optional)</label>
+                <Input 
+                  value={restrictedToUserId} 
+                  onChange={(e) => setRestrictedToUserId(e.target.value)} 
+                  placeholder="Leave empty for all users"
+                  className="font-mono text-xs"
+                />
+                <p className="text-xs text-slate-500">If set, rule only applies to this specific user</p>
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Restrict to Role (optional)</label>
+                <select 
+                  className="flex h-10 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm"
+                  value={restrictedToRole}
+                  onChange={(e) => setRestrictedToRole(e.target.value as "admin" | "member" | "")}
+                >
+                  <option value="">All roles</option>
+                  <option value="admin">Admin only</option>
+                  <option value="member">Member only</option>
+                </select>
+                <p className="text-xs text-slate-500">If set, rule only applies to this role</p>
+              </div>
+            </div>
+            
+            {/* Voting threshold */}
+            <div className="border-t pt-4">
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Voting Threshold (optional)</label>
+                <Input 
+                  type="number" 
+                  value={votingThreshold || ""} 
+                  onChange={(e) => setVotingThreshold(e.target.value ? parseInt(e.target.value) : undefined)} 
+                  placeholder="Number of votes needed for auto-approval"
+                  min="1"
+                />
+                <p className="text-xs text-slate-500">If set, commands matching this rule will require this many approve votes to auto-approve</p>
+              </div>
+            </div>
           </CardContent>
           <CardFooter className="flex justify-end gap-2">
             {editingId && (
@@ -232,20 +290,27 @@ export default function RulesPage() {
                 <TableHead>Priority</TableHead>
                 <TableHead>Pattern</TableHead>
                 <TableHead>Action</TableHead>
+                <TableHead>Restrictions</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {isLoading ? (
-                <TableRow><TableCell colSpan={5} className="text-center">Loading...</TableCell></TableRow>
+                <TableRow><TableCell colSpan={6} className="text-center">Loading...</TableCell></TableRow>
               ) : rules.length === 0 ? (
-                <TableRow><TableCell colSpan={5} className="text-center text-slate-500">No rules defined.</TableCell></TableRow>
+                <TableRow><TableCell colSpan={6} className="text-center text-slate-500">No rules defined.</TableCell></TableRow>
               ) : (
-                rules.map((rule) => (
+                rules.map((rule: any) => {
+                  const restrictions = [];
+                  if (rule.restricted_to_user_id) restrictions.push(`User: ${rule.restricted_to_user_id.substring(0, 8)}...`);
+                  if (rule.restricted_to_role) restrictions.push(`Role: ${rule.restricted_to_role}`);
+                  if (rule.voting_threshold) restrictions.push(`Votes: ${rule.voting_threshold}`);
+                  
+                  return (
                   <TableRow key={rule._id} className={!rule.enabled ? "opacity-60" : ""}>
                     <TableCell>{rule.priority ?? 0}</TableCell>
-                    <TableCell className="font-mono">{rule.pattern || '-'}</TableCell>
+                    <TableCell className="font-mono text-xs">{rule.pattern || '-'}</TableCell>
                     <TableCell>
                       <Badge variant={
                         rule.action === "AUTO_ACCEPT" ? "success" :
@@ -253,6 +318,19 @@ export default function RulesPage() {
                       }>
                         {rule.action || 'UNKNOWN'}
                       </Badge>
+                    </TableCell>
+                    <TableCell>
+                      {restrictions.length > 0 ? (
+                        <div className="flex flex-col gap-1">
+                          {restrictions.map((r, i) => (
+                            <Badge key={i} variant="secondary" className="text-xs w-fit">
+                              {r}
+                            </Badge>
+                          ))}
+                        </div>
+                      ) : (
+                        <span className="text-xs text-slate-400">None</span>
+                      )}
                     </TableCell>
                     <TableCell>
                       <Badge variant={rule.enabled ? "default" : "secondary"}>
@@ -270,7 +348,8 @@ export default function RulesPage() {
                       </div>
                     </TableCell>
                   </TableRow>
-                ))
+                  );
+                })
               )}
             </TableBody>
           </Table>

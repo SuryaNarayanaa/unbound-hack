@@ -50,6 +50,26 @@ export const createRule = internalMutation({
     enabled: v.boolean(),
     creatorId: v.id("users"),
     cost: v.optional(v.number()),
+    // Escalation fields
+    escalation_enabled: v.optional(v.boolean()),
+    escalation_delay_ms: v.optional(v.number()),
+    escalation_action: v.optional(v.union(v.literal("AUTO_ACCEPT"), v.literal("AUTO_REJECT"))),
+    // Time-based scheduling fields
+    schedule_type: v.optional(v.union(v.literal("always"), v.literal("time_windows"), v.literal("cron"))),
+    time_windows: v.optional(v.array(v.object({
+      day_of_week: v.number(),
+      start_hour: v.number(),
+      start_minute: v.number(),
+      end_hour: v.number(),
+      end_minute: v.number(),
+      timezone: v.optional(v.string()),
+    }))),
+    cron_expression: v.optional(v.string()),
+    cron_timezone: v.optional(v.string()),
+    // User-tier restriction fields
+    restricted_to_user_id: v.optional(v.id("users")),
+    restricted_to_role: v.optional(v.union(v.literal("admin"), v.literal("member"))),
+    voting_threshold: v.optional(v.number()),
   },
   returns: v.id("rules"),
   handler: async (ctx, args) => {
@@ -64,6 +84,16 @@ export const createRule = internalMutation({
       created_by: args.creatorId,
       created_at: Date.now(),
       cost: args.cost,
+      escalation_enabled: args.escalation_enabled,
+      escalation_delay_ms: args.escalation_delay_ms,
+      escalation_action: args.escalation_action,
+      schedule_type: args.schedule_type ?? "always",
+      time_windows: args.time_windows,
+      cron_expression: args.cron_expression,
+      cron_timezone: args.cron_timezone,
+      restricted_to_user_id: args.restricted_to_user_id,
+      restricted_to_role: args.restricted_to_role,
+      voting_threshold: args.voting_threshold,
     });
   },
 });
@@ -124,7 +154,11 @@ export const createAuditLog = internalMutation({
       v.literal("USER_UPDATED"),
       v.literal("CREDITS_UPDATED"),
       v.literal("RULE_UPDATED"),
-      v.literal("RULE_DELETED")
+      v.literal("RULE_DELETED"),
+      v.literal("COMMAND_ESCALATED"),
+      v.literal("COMMAND_APPROVED"),
+      v.literal("COMMAND_REJECTED_BY_APPROVER"),
+      v.literal("VOTE_CAST")
     ),
     details: v.any(),
   },
@@ -152,7 +186,11 @@ export const getAuditLogs = internalQuery({
       v.literal("USER_UPDATED"),
       v.literal("CREDITS_UPDATED"),
       v.literal("RULE_UPDATED"),
-      v.literal("RULE_DELETED")
+      v.literal("RULE_DELETED"),
+      v.literal("COMMAND_ESCALATED"),
+      v.literal("COMMAND_APPROVED"),
+      v.literal("COMMAND_REJECTED_BY_APPROVER"),
+      v.literal("VOTE_CAST")
     )),
     from: v.optional(v.number()), // Timestamp
     to: v.optional(v.number()),   // Timestamp

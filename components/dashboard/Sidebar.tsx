@@ -11,6 +11,7 @@ import {
   ShieldAlert,
   Users,
   FileClock,
+  CheckCircle2,
   LogOut,
 } from "lucide-react";
 
@@ -38,6 +39,12 @@ export function Sidebar() {
       roles: ["admin"],
     },
     {
+      href: "/dashboard/approvals",
+      label: "Approvals",
+      icon: CheckCircle2,
+      roles: ["admin"],
+    },
+    {
       href: "/dashboard/users",
       label: "Users & Credits",
       icon: Users,
@@ -52,14 +59,14 @@ export function Sidebar() {
   ];
 
   return (
-    <aside className="flex h-screen w-64 flex-col border-r border-slate-200 bg-white">
-      <div className="flex h-16 items-center border-b border-slate-200 px-6">
-        <span className="text-lg font-bold text-slate-900">Command Gateway</span>
+    <aside className="flex h-screen w-64 flex-col border-r border-border bg-card">
+      <div className="flex h-16 items-center border-b border-border px-6">
+        <span className="text-lg font-bold text-foreground">Command Gateway</span>
       </div>
       <nav className="flex-1 space-y-1 p-4">
         {links.map((link) => {
           if (user && user.role && !link.roles.includes(user.role)) return null;
-          
+
           const Icon = link.icon;
           const isActive = pathname === link.href;
 
@@ -70,8 +77,8 @@ export function Sidebar() {
               className={cn(
                 "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
                 isActive
-                  ? "bg-slate-900 text-slate-50"
-                  : "text-slate-700 hover:bg-slate-100 hover:text-slate-900"
+                  ? "bg-primary text-primary-foreground"
+                  : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
               )}
             >
               <Icon className="h-4 w-4" />

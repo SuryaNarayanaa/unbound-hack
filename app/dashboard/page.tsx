@@ -13,7 +13,7 @@ import { Activity, Ban, CheckCircle, Clock } from "lucide-react";
 
 export default function DashboardPage() {
   const { user, apiKey } = useAuth();
-  
+
   const commands = useQuery(
     api.queries.listCommands,
     apiKey ? { apiKey } : "skip"
@@ -31,20 +31,20 @@ export default function DashboardPage() {
   const loading = commands === undefined;
 
   if (loading) {
-    return <div className="p-8">Loading dashboard...</div>;
+    return <div className="p-8 text-muted-foreground">Loading dashboard...</div>;
   }
 
   return (
     <div className="space-y-6">
-      <Card className="bg-slate-900 text-slate-50">
+      <Card className="bg-primary text-primary-foreground border-none shadow-lg shadow-primary/20">
         <CardHeader>
-          <CardTitle>Welcome back, {user?.name}</CardTitle>
-          <CardDescription className="text-slate-300">
+          <CardTitle className="text-2xl">Welcome back, {user?.name}</CardTitle>
+          <CardDescription className="text-primary-foreground/80 text-base">
             You have <span className="font-bold text-white">{user?.credits} credits</span> available.
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <p className="text-sm text-slate-300">
+          <p className="text-sm text-primary-foreground/80">
             This is your Command Gateway dashboard. Submit commands, track their status, and manage your rules here.
           </p>
         </CardContent>
@@ -54,7 +54,7 @@ export default function DashboardPage() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Commands</CardTitle>
-            <Activity className="h-4 w-4 text-slate-500" />
+            <Activity className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{stats.total}</div>
@@ -67,7 +67,7 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{stats.executed}</div>
-            <p className="text-xs text-slate-500">
+            <p className="text-xs text-muted-foreground">
               {stats.total > 0 ? Math.round((stats.executed / stats.total) * 100) : 0}% success rate
             </p>
           </CardContent>
@@ -75,7 +75,7 @@ export default function DashboardPage() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Rejected</CardTitle>
-            <Ban className="h-4 w-4 text-red-500" />
+            <Ban className="h-4 w-4 text-destructive" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{stats.rejected}</div>
@@ -98,7 +98,7 @@ export default function DashboardPage() {
         </CardHeader>
         <CardContent>
           {recentCommands.length === 0 ? (
-            <p className="text-sm text-slate-500">No commands submitted yet.</p>
+            <p className="text-sm text-muted-foreground">No commands submitted yet.</p>
           ) : (
             <Table>
               <TableHeader>
@@ -118,14 +118,14 @@ export default function DashboardPage() {
                     <TableCell>
                       <Badge variant={
                         cmd.status === "executed" ? "success" :
-                        cmd.status === "rejected" ? "destructive" :
-                        cmd.status === "needs_approval" ? "warning" : "secondary"
+                          cmd.status === "rejected" ? "destructive" :
+                            cmd.status === "needs_approval" ? "warning" : "secondary"
                       }>
                         {cmd.status || 'unknown'}
                       </Badge>
                     </TableCell>
                     <TableCell>{cmd.cost ?? 0}</TableCell>
-                    <TableCell className="text-xs text-slate-500">
+                    <TableCell className="text-xs text-muted-foreground">
                       {cmd.created_at ? format(new Date(cmd.created_at), "MMM d, HH:mm") : '-'}
                     </TableCell>
                   </TableRow>

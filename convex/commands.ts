@@ -72,8 +72,11 @@ export const submitCommand = internalMutation({
         };
       }
 
-      // 3. Fetch enabled rules sorted by priority
-      const enabledRules: any[] = await ctx.runQuery(internal.rules.getEnabledRules, {});
+      // 3. Fetch enabled rules sorted by priority (filtered by user-tier restrictions)
+      const enabledRules: any[] = await ctx.runQuery(internal.rules.getEnabledRules, {
+        userId: args.userId,
+        userRole: user.role,
+      });
       
       // Sort by priority descending (higher priority first)
       // If priorities are equal, sort by created_at ASC (earlier rules win) to enforce "first match wins"
@@ -182,7 +185,15 @@ export const submitCommand = internalMutation({
         status = "needs_approval";
       }
 
-      // 7. Transactionally process command based on action
+      // 7. Calculate escalation timestamp if needed
+      // Set escalation_at for commands that need approval and have escalation enabled
+      let escalationAt: number | undefined = undefined;
+      if (status === "needs_approval" && matchedRule?.escalation_enabled && matchedRule.escalation_delay_ms) {
+        const now = Date.now();
+        escalationAt = now + matchedRule.escalation_delay_ms;
+      }
+
+      // 8. Transactionally process command based on action
       // Only deduct credits for AUTO_ACCEPT actions (successful execution)
       if (action === "AUTO_ACCEPT") {
         // Deduct credits on successful execution (execution is mocked and happens immediately)
@@ -200,7 +211,7 @@ export const submitCommand = internalMutation({
         }
       }
 
-      // 8. Create command record with mocked output for executed commands
+      // 9. Create command record with mocked output for executed commands
       const mockedOutput = status === "executed" 
         ? `Execution mocked: would run '${args.commandText}'`
         : undefined;
@@ -217,9 +228,12 @@ export const submitCommand = internalMutation({
           ? (matchedRule ? "Matched rule with AUTO_REJECT action" : "No matching rule found - default AUTO_REJECT")
           : undefined,
         output: mockedOutput,
+        escalation_at: escalationAt,
+        escalated: false,
+        voting_threshold: matchedRule?.voting_threshold,
       });
 
-      // 9. Create COMMAND_SUBMITTED audit log for all commands
+      // 10. Create COMMAND_SUBMITTED audit log for all commands
       await ctx.db.insert("audit_logs", {
         user_id: args.userId,
         command_id: commandId,
@@ -233,7 +247,7 @@ export const submitCommand = internalMutation({
         created_at: Date.now(),
       });
 
-      // 10. Create final status audit log (COMMAND_EXECUTED or COMMAND_REJECTED)
+      // 11. Create final status audit log (COMMAND_EXECUTED or COMMAND_REJECTED)
       if (status === "executed") {
         await ctx.db.insert("audit_logs", {
           user_id: args.userId,
