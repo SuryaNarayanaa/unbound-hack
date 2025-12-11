@@ -142,7 +142,7 @@ export default function CommandsPage() {
                   commands.map((cmd: any) => (
                     <TableRow key={cmd._id}>
                       <TableCell className="font-mono text-xs">
-                        {cmd.command_text}
+                        {cmd.command_text || '-'}
                         {cmd.rejection_reason && (
                             <div className="mt-1 text-xs text-red-500">Reason: {cmd.rejection_reason}</div>
                         )}
@@ -153,15 +153,15 @@ export default function CommandsPage() {
                           cmd.status === "rejected" ? "destructive" :
                           cmd.status === "needs_approval" ? "warning" : "secondary"
                         }>
-                          {cmd.status}
+                          {cmd.status || 'unknown'}
                         </Badge>
                       </TableCell>
                       <TableCell className="font-mono text-xs text-slate-500">
                         {cmd.matched_rule_id ? cmd.matched_rule_id.substring(0, 8) + '...' : '-'}
                       </TableCell>
-                      <TableCell>{cmd.cost}</TableCell>
+                      <TableCell>{cmd.cost ?? 0}</TableCell>
                       <TableCell className="text-xs text-slate-500">
-                        {format(new Date(cmd.created_at), "MMM d, HH:mm:ss")}
+                        {cmd.created_at ? format(new Date(cmd.created_at), "MMM d, HH:mm:ss") : '-'}
                       </TableCell>
                     </TableRow>
                   ))

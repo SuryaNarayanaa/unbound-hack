@@ -121,10 +121,10 @@ export default function RulesPage() {
 
   const handleEdit = (rule: Rule) => {
     setEditingId(rule._id);
-    setPattern(rule.pattern);
-    setAction(rule.action);
-    setPriority(rule.priority);
-    setEnabled(rule.enabled);
+    setPattern(rule.pattern || "");
+    setAction(rule.action || "REQUIRE_APPROVAL");
+    setPriority(rule.priority ?? 10);
+    setEnabled(rule.enabled ?? true);
     setRegexError(null);
     setConflictWarning(null); // Don't warn about itself
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -136,9 +136,9 @@ export default function RulesPage() {
       await updateRule({
         apiKey,
         ruleId: rule._id as Id<"rules">,
-        enabled: !rule.enabled,
+        enabled: !(rule.enabled ?? true),
       });
-      addToast(`Rule ${!rule.enabled ? "enabled" : "disabled"}`, "success");
+      addToast(`Rule ${!(rule.enabled ?? true) ? "enabled" : "disabled"}`, "success");
     } catch (error) {
       addToast("Failed to update rule", "error");
     }
@@ -244,14 +244,14 @@ export default function RulesPage() {
               ) : (
                 rules.map((rule) => (
                   <TableRow key={rule._id} className={!rule.enabled ? "opacity-60" : ""}>
-                    <TableCell>{rule.priority}</TableCell>
-                    <TableCell className="font-mono">{rule.pattern}</TableCell>
+                    <TableCell>{rule.priority ?? 0}</TableCell>
+                    <TableCell className="font-mono">{rule.pattern || '-'}</TableCell>
                     <TableCell>
                       <Badge variant={
                         rule.action === "AUTO_ACCEPT" ? "success" :
                         rule.action === "AUTO_REJECT" ? "destructive" : "warning"
                       }>
-                        {rule.action}
+                        {rule.action || 'UNKNOWN'}
                       </Badge>
                     </TableCell>
                     <TableCell>

@@ -72,7 +72,7 @@ export default function AuditPage() {
               >
                 <option value="">All Users</option>
                 {users.map((u: any) => (
-                  <option key={u.id} value={u.id}>{u.name}</option>
+                  <option key={u.id} value={u.id}>{u.name || u.id}</option>
                 ))}
               </select>
             </div>
@@ -140,11 +140,11 @@ export default function AuditPage() {
                 logs.map((log: any) => (
                   <TableRow key={log._id}>
                     <TableCell className="text-sm text-slate-500">
-                      {format(new Date(log.created_at), "MMM d, HH:mm:ss")}
+                      {log.created_at ? format(new Date(log.created_at), "MMM d, HH:mm:ss") : '-'}
                     </TableCell>
                     <TableCell>{getUserName(log.user_id)}</TableCell>
                     <TableCell>
-                      <Badge variant="outline">{log.event_type.replace(/_/g, " ")}</Badge>
+                      <Badge variant="outline">{log.event_type?.replace(/_/g, " ") ?? 'unknown'}</Badge>
                     </TableCell>
                     <TableCell className="font-mono text-xs">{log.command_id ? log.command_id.substring(0, 8) + '...' : '-'}</TableCell>
                     <TableCell className="text-right">
@@ -168,13 +168,13 @@ export default function AuditPage() {
           <div className="space-y-4">
              <div className="grid grid-cols-2 gap-4 text-sm">
                 <div>
-                  <span className="font-semibold">Type:</span> {selectedLog.event_type}
+                  <span className="font-semibold">Type:</span> {selectedLog.event_type || 'unknown'}
                 </div>
                 <div>
-                  <span className="font-semibold">Time:</span> {format(new Date(selectedLog.created_at), "PPpp")}
+                  <span className="font-semibold">Time:</span> {selectedLog.created_at ? format(new Date(selectedLog.created_at), "PPpp") : '-'}
                 </div>
                 <div>
-                   <span className="font-semibold">User ID:</span> <span className="font-mono text-xs">{selectedLog.user_id}</span>
+                   <span className="font-semibold">User ID:</span> <span className="font-mono text-xs">{selectedLog.user_id || '-'}</span>
                 </div>
                 <div>
                    <span className="font-semibold">Command ID:</span> {selectedLog.command_id ? <span className="font-mono text-xs">{selectedLog.command_id}</span> : '-'}

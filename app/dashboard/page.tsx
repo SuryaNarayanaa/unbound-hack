@@ -112,19 +112,21 @@ export default function DashboardPage() {
               <TableBody>
                 {recentCommands.map((cmd: any) => (
                   <TableRow key={cmd._id}>
-                    <TableCell className="font-mono text-xs">{cmd.command_text.substring(0, 50)}{cmd.command_text.length > 50 ? '...' : ''}</TableCell>
+                    <TableCell className="font-mono text-xs">
+                      {cmd.command_text ? (cmd.command_text.substring(0, 50) + (cmd.command_text.length > 50 ? '...' : '')) : '-'}
+                    </TableCell>
                     <TableCell>
                       <Badge variant={
                         cmd.status === "executed" ? "success" :
                         cmd.status === "rejected" ? "destructive" :
                         cmd.status === "needs_approval" ? "warning" : "secondary"
                       }>
-                        {cmd.status}
+                        {cmd.status || 'unknown'}
                       </Badge>
                     </TableCell>
-                    <TableCell>{cmd.cost}</TableCell>
+                    <TableCell>{cmd.cost ?? 0}</TableCell>
                     <TableCell className="text-xs text-slate-500">
-                      {format(new Date(cmd.created_at), "MMM d, HH:mm")}
+                      {cmd.created_at ? format(new Date(cmd.created_at), "MMM d, HH:mm") : '-'}
                     </TableCell>
                   </TableRow>
                 ))}

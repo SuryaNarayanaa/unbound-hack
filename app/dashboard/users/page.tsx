@@ -124,13 +124,13 @@ export default function UsersPage() {
               ) : (
                 users.map((u: any) => (
                   <TableRow key={u.id}>
-                    <TableCell className="font-medium">{u.name}</TableCell>
+                    <TableCell className="font-medium">{u.name || '-'}</TableCell>
                     <TableCell>
                       <Badge variant={u.role === "admin" ? "destructive" : "secondary"}>
                         {u.role?.toUpperCase() ?? "MEMBER"}
                       </Badge>
                     </TableCell>
-                    <TableCell>{u.credits}</TableCell>
+                    <TableCell>{u.credits ?? 0}</TableCell>
                     <TableCell className="text-slate-500">
                       {u.created_at ? format(new Date(u.created_at), "MMM d, yyyy") : "-"}
                     </TableCell>
